@@ -1,7 +1,8 @@
 import os
 import cv2
+import osr
+import gdal
 import zipfile
-import gdal, osr
 import numpy as np
 
 
@@ -11,7 +12,7 @@ class Raster:
         pass
 
     @staticmethod
-    def remove_from_memory(var):
+    def __flush_var(var):
         """
         Method to remove unwanted objects from memory
 
@@ -27,7 +28,7 @@ class Raster:
             del var
 
     @staticmethod
-    def get_dtype(in_arr):
+    def __dtype(in_arr):
         """
         Method to retrieve an array's data type.
 
@@ -42,10 +43,9 @@ class Raster:
 
         # Get minimum and maximum values in the array and the value of one random element
         min_val = in_arr.min()
-        med_val = np.median(in_arr)
         max_val = in_arr.max()
 
-        if min_val == int(min_val) and med_val == int(med_val) and max_val == int(max_val):
+        if all(in_arr == in_arr.astype(np.int)):
             if max_val < 256:
                 if min_val < 0:
                     arrtype = 'int8'
@@ -71,24 +71,21 @@ class Raster:
 
     """I/O"""
 
-    def load_image(self, path, img):
+    def load_image(self, img_path):
         """
         Method to load an array from a raster file and retrieve the geo-transformation, projection and EPSG of the CRS
 
-        :type path: String
-        :param path: Path to directory
-
-        :type img: String
-        :param img: Image filename
+        :type img_path: String
+        :param img_path: Path to image
 
         :return: Array, geo-transformation, projection, epsg code
         """
 
-        obj = gdal.Open(os.path.join(path, img))
+        obj = gdal.Open(img_path)
         array = obj.ReadAsArray()
         if len(array.shape) == 3:
             array = np.einsum('ijk->jki', array)
-        array = array.astype(self.get_dtype(array)[1])
+        array = array.astype(self.__dtype(array)[1])
         transf = obj.GetGeoTransform()
         proj = obj.GetProjection()
         srs = osr.SpatialReference(wkt=proj)
@@ -96,31 +93,29 @@ class Raster:
 
         return array, transf, proj, epsg
 
-    def load_from_zip(self, path, zipf, req_files, extension):
+    def load_from_zip(self, zipf_path, req_files, extension):
         """
         Method that loads all the required bands in arrays and saves them to a dictionary.
 
-        :type path: String
-        :param path: Absolute path to zip file in specified input directory
+        :type zipf_path: String
+        :param zipf_path: Path to zip file
 
-        :type zipf: String
-        :param zipf: Zip filename
-
-        :type req_bands_ls: String or List/Tuple of strings
-        :param req_bands_ls: List of strings included in the filenames (e.g. band numbers)
+        :type req_files: String or List/Tuple of strings
+        :param req_files: List of strings included in the file names (e.g. band numbers)
 
         :type extension: String
         :param extension: Extension of the target image
 
-        :return: Dictionary containing the array, geo-transformation tuple, projection and EPSG code of each image. List containing the dictionary keys
+        :return: Dictionary containing the array, geo-transformation tuple, projection and EPSG code of each image.
+        List containing the dictionary keys
         """
 
         # Initialize gdal zip file handler
-        ziphandler = '/vsizip/' + path
+        ziphandler = os.path.join('/vsizip/', zipf_path)
 
         # Read zip file
         try:
-            archive = zipfile.ZipFile(os.path.join(path, zipf), 'r')
+            archive = zipfile.ZipFile(zipf_path, 'r')
         except zipfile.BadZipfile:
             pass
 
@@ -143,7 +138,7 @@ class Raster:
                 key_ls.append(key_in)
 
                 # Load image, get metadata and store to dictionary
-                array, transf, proj, epsg = self.load_image(os.path.join(ziphandler, zipf).replace('\\', '/'), img)
+                array, transf, proj, epsg = self.load_image(ziphandler, img)
                 band_dict[key_in] = [array, transf, proj, epsg]
             except AttributeError:
                 pass
@@ -163,8 +158,8 @@ class Raster:
         :type output_name: Strings
         :param output_name: Output filename
 
-        :type transf: Tuple of floats
-        :param transf: Geometric Transformation (Format: (Xo, pixel size in X direction, X-axis skew, Yo, Y-axis skew, pixel size in Y direction))
+        :type transf: Tuple of floats :param transf: Geometric Transformation (Format: (Xo, pixel size in X
+        direction, X-axis skew, Yo, Y-axis skew, pixel size in Y direction))
 
         :type prj: String
         :param prj: Projection
@@ -183,7 +178,7 @@ class Raster:
                       'float32': gdal.GDT_Float32}
 
         # Get array type
-        out_arr = out_arr.astype(self.get_dtype(out_arr)[0])
+        out_arr = out_arr.astype(self.__dtype(out_arr)[0])
 
         try:
             # Determine the shape of the array and the number of bands
@@ -210,7 +205,7 @@ class Raster:
         out_path = os.path.join(path, f"{output_name}.tif")
         driver = gdal.GetDriverByName('GTiff')
         dataset = driver.Create(out_path, out_arr.shape[col_ind], out_arr.shape[row_ind], nband,
-                                gdal_dtype[self.get_dtype(out_arr)[0]], options=opt_ls)
+                                gdal_dtype[self.__dtype(out_arr)[0]], options=opt_ls)
         dataset.SetGeoTransform(transf)
         dataset.SetProjection(prj)
 
@@ -400,7 +395,7 @@ class Raster:
 
         return sliced_array
 
-    def swf(self, imarr, ksize, filter_op):
+    def swf(self, imarr, ksize=None, filter_op='mean'):
         """
         Method to apply a pixel-by-pixel median or mean filter using the side window technique.
 
@@ -453,15 +448,15 @@ class Raster:
         up_down = as_strided(padded, shape=up_down_shape, strides=strides)
         left_right = as_strided(padded, shape=left_right_shape, strides=strides)
         rest = as_strided(padded, shape=others_shape, strides=strides)
-        self.remove_from_memory(padded)
+        self.__flush_var(padded)
 
         # Get the median value of each sub-window, then flatten them
         up_down_meds = np.apply_over_axes(filter_op, up_down, pr_axes).astype(up_down.dtype)
-        self.remove_from_memory(up_down)
+        self.__flush_var(up_down)
         left_right_meds = np.apply_over_axes(filter_op, left_right, pr_axes).astype(left_right.dtype)
-        self.remove_from_memory(left_right)
+        self.__flush_var(left_right)
         rest_meds = np.apply_over_axes(filter_op, rest, pr_axes).astype(rest.dtype)
-        self.remove_from_memory(rest)
+        self.__flush_var(rest)
 
         # Compute filter for subwindows
         up_meds = up_down_meds[:-radius, :].reshape(reshape_shape)
@@ -475,11 +470,11 @@ class Raster:
 
         # Stack the flatten arrays and find where the minimum value is for each pixel
         stacked = np.vstack((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
-        self.remove_from_memory((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
+        self.__flush_var((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
         subtr = np.absolute(stacked - imarr.reshape(reshape_shape))
-        self.remove_from_memory(imarr)
+        self.__flush_var(imarr)
         inds = np.argmin(subtr, axis=0)  # Get indices where the subtr is minimum along the 0 axis
-        self.remove_from_memory(subtr)
+        self.__flush_var(subtr)
 
         # Get the output pixel values
         if not bands:
@@ -488,7 +483,7 @@ class Raster:
             filt = np.take_along_axis(stacked, np.expand_dims(inds, axis=0), axis=0).reshape(sy, sx, bands)
             # filt = np.flip(filt, 2)  # Flip channel order from BGR to RGB
 
-        self.remove_from_memory(stacked)
+        self.__flush_var(stacked)
 
         return filt
 
@@ -507,17 +502,17 @@ class Raster:
         :type in_pix: Float/Int
         :param in_pix: Input pixel size. Provide instead of out_shape. For non-square pixels, provide a tuple (psy, psx)
 
-        :type out_pix: Float/Int
-        :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape. For non-square pixels, provide a tuple (psy, psx)
+        :type out_pix: Float/Int :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape.
+        For non-square pixels, provide a tuple (psy, psx)
 
         :return: Resampled array, Adjusted Geo-transformation
         """
 
         # Make sure in_arr is of a supported dtype
         try:
-            assert self.get_dtype(in_arr) in ('uint8', 'uint16', 'float32')
+            assert self.__dtype(in_arr) in ('uint8', 'uint16', 'float32')
         except AssertionError:
-            in_arr.astype(self.get_dtype(in_arr)[1])
+            in_arr.astype(self.__dtype(in_arr)[1])
 
         # Resize array
         if out_shape:
@@ -554,7 +549,7 @@ class Raster:
         # Also, resample if needed to the largest size
 
         rgb_8bit = rgb_stack.copy()
-        self.remove_from_memory(rgb_stack)
+        self.__flush_var(rgb_stack)
 
         for i in range(rgb_8bit.shape[2]):
 
@@ -589,11 +584,8 @@ class Raster:
 
         import math
 
-        peak = np.nanmax(disp_map)  # Get max value of correlation surface
-
         nrow, ncol = disp_map.shape  # Get # of rows in correlation surface
         peak_y, peak_x = np.unravel_index(np.argmax(disp_map, axis=None), disp_map.shape)
-        # snr = peak / np.nanmean(np.abs(disp_map))  # Calculate SNR
 
         # Get displacements adjacent to peak
         x_bef = (peak_x - 1 >= 0) * (peak_x - 1) + (peak_x - 1 < 0) * (peak_x)
@@ -666,12 +658,11 @@ class Raster:
         disp_rb = self.estimate_disp(disp_map_rb)
 
         # Estimate weighted mean displacement
-        # mean_disp = 0.25 * disp_bg + 0.25 * disp_rg + 0.50 * disp_rb
         mean_disp = np.mean((disp_bg, disp_rb, disp_rg))
 
         return mean_disp
 
-    def phase_correlation(self, rgb_stack, ksize, transf=(0, 1, 0, 0, 0, -1)):
+    def phase_correlation(self, rgb_stack, ksize=3, transf=(0, 1, 0, 0, 0, -1)):
         """
         Wrapper method to estimate subpixel displacement in an RGB stack.
 
@@ -682,7 +673,7 @@ class Raster:
         :param ksize: Kernel size
 
         :type transf: Tuple
-        :param blue: Geo-transformation tuple
+        :param transf: Geo-transformation tuple
 
         :return: Subpixel displacement map,  geo-transformation tuple
         """
