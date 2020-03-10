@@ -145,18 +145,15 @@ class Raster:
 
         return band_dict, key_ls
 
-    def write_image(self, out_arr, path, output_name, transf, prj, compression=True):
+    def write_image(self, out_arr, output_img, transf, prj, compression=True):
         """
         Method that writes an array to a georeferenced GeoTIFF file.
 
         :type out_arr: 2D binary image array
         :param out_arr: Array containing the mask
 
-        :type path: String
-        :param path: Path to output directory
-
-        :type output_name: Strings
-        :param output_name: Output filename
+        :type output_img: String
+        :param output_img: Output image path
 
         :type transf: Tuple of floats :param transf: Geometric Transformation (Format: (Xo, pixel size in X
         direction, X-axis skew, Yo, Y-axis skew, pixel size in Y direction))
@@ -202,9 +199,10 @@ class Raster:
         else:
             opt_ls = []
 
-        out_path = os.path.join(path, f"{output_name}.tif")
+        if not output_img.endswith('.tif'):
+            output_img = f"{output_img}.tif"
         driver = gdal.GetDriverByName('GTiff')
-        dataset = driver.Create(out_path, out_arr.shape[col_ind], out_arr.shape[row_ind], nband,
+        dataset = driver.Create(output_img, out_arr.shape[col_ind], out_arr.shape[row_ind], nband,
                                 gdal_dtype[self.__dtype(out_arr)[0]], options=opt_ls)
         dataset.SetGeoTransform(transf)
         dataset.SetProjection(prj)
@@ -272,7 +270,6 @@ class Raster:
                                            iterations=1)
         else:
             pass
-
 
         return land_mask_arr
 
@@ -395,12 +392,12 @@ class Raster:
 
         return sliced_array
 
-    def swf(self, imarr, ksize=None, filter_op='mean'):
+    def swf(self, in_arr, ksize=None, filter_op='mean'):
         """
         Method to apply a pixel-by-pixel median or mean filter using the side window technique.
 
-        :type imarr: Array
-        :param imarr: 2D/3D array
+        :type in_arr: Array
+        :param in_arr: 2D/3D array
 
         :type ksize: Int
         :param ksize: Window size (odd number)
@@ -419,18 +416,18 @@ class Raster:
         # Get window radius, padded array and strides
         ksize += 1 - ksize % 2  # Make sure window size is an odd number
         radius = ksize // 2  # Window radius
-        padded = np.pad(imarr, radius, 'reflect')  # Pad array using the radius
+        padded = np.pad(in_arr, radius, 'reflect')  # Pad array using the radius
         strides = padded.strides + padded.strides
 
         # Parameters that depend on the input array
         try:
-            assert len(imarr.shape) == 2
-            sy, sx = imarr.shape
+            assert len(in_arr.shape) == 2
+            sy, sx = in_arr.shape
             bands = False
             reshape_shape = -1
             pr_axes = [2, 3]
         except AssertionError:
-            sy, sx, bands = imarr.shape
+            sy, sx, bands = in_arr.shape
             reshape_shape = (1, sy * sx, bands)
             pr_axes = [3, 4]
 
@@ -471,8 +468,8 @@ class Raster:
         # Stack the flatten arrays and find where the minimum value is for each pixel
         stacked = np.vstack((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
         self.__flush_var((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
-        subtr = np.absolute(stacked - imarr.reshape(reshape_shape))
-        self.__flush_var(imarr)
+        subtr = np.absolute(stacked - in_arr.reshape(reshape_shape))
+        self.__flush_var(in_arr)
         inds = np.argmin(subtr, axis=0)  # Get indices where the subtr is minimum along the 0 axis
         self.__flush_var(subtr)
 
