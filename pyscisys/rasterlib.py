@@ -45,7 +45,7 @@ class Raster:
         min_val = in_arr.min()
         max_val = in_arr.max()
 
-        if all(in_arr == in_arr.astype(np.int)):
+        if np.array_equal(in_arr, in_arr.astype(np.int)):
             if max_val < 256:
                 if min_val < 0:
                     arrtype = 'int8'
@@ -138,7 +138,7 @@ class Raster:
                 key_ls.append(key_in)
 
                 # Load image, get metadata and store to dictionary
-                array, transf, proj, epsg = self.load_image(ziphandler, img)
+                array, transf, proj, epsg = self.load_image(os.path.join(ziphandler, img))
                 band_dict[key_in] = [array, transf, proj, epsg]
             except AttributeError:
                 pass
