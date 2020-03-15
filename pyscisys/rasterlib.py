@@ -133,8 +133,7 @@ class Raster:
         for img in img_ls:
             try:
                 # Find which of the req files fits the current, create the dict key and store it in the keys' list
-                req_key = [x for x in req_files if x in img]
-                key_in = f"{img.split('.')[0]}_{req_key[0]}"
+                key_in = os.path.split(img)[1].split('.')[0]
                 key_ls.append(key_in)
 
                 # Load image, get metadata and store to dictionary
