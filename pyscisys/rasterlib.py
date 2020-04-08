@@ -111,7 +111,7 @@ class Raster:
         """
 
         # Initialize gdal zip file handler
-        ziphandler = os.path.join('/vsizip/', zipf_path)
+        ziphandler = '/vsizip/' + zipf_path
 
         # Read zip file
         try:
