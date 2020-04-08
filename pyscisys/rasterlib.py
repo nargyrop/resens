@@ -12,7 +12,7 @@ class Raster:
         pass
 
     @staticmethod
-    def __flush_var(var):
+    def remove_var(var):
         """
         Method to remove unwanted objects from memory
 
@@ -23,9 +23,9 @@ class Raster:
         """
         if isinstance(var, (list, tuple)):
             for i in var:
-                del i
+                i = None
         else:
-            del var
+            var = None
 
     @staticmethod
     def __dtype(in_arr):
