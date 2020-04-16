@@ -545,23 +545,37 @@ class Raster:
         # Also, resample if needed to the largest size
 
         rgb_8bit = rgb_stack.copy()
-        self.__flush_var(rgb_stack)
+        self.remove_var(rgb_stack)
 
-        for i in range(rgb_8bit.shape[2]):
+        try:
+            for i in range(rgb_8bit.shape[2]):
+                # Get image statistics
+                av_val = np.mean(rgb_8bit[:, :, i])
+                std_val = np.std(rgb_8bit[:, :, i])
+                min = av_val - 1.96 * std_val
+                min *= int(min >= 0)  # make sure min value is not negative
+                max = av_val + 1.96 * std_val
 
+                # Truncate the array - Contrast Enhancement
+                rgb_8bit[:, :, i][rgb_8bit[:, :, i] > max] = max
+                rgb_8bit[:, :, i][rgb_8bit[:, :, i] < min] = min
+
+                # Convert to 8bits
+                rgb_8bit[:, :, i] = np.divide(rgb_8bit[:, :, i] - min, max - min) * 255
+        except IndexError:
             # Get image statistics
-            av_val = np.mean(rgb_8bit[:, :, i])
-            std_val = np.std(rgb_8bit[:, :, i])
+            av_val = np.mean(rgb_8bit)
+            std_val = np.std(rgb_8bit)
             min = av_val - 1.96 * std_val
             min *= int(min >= 0)  # make sure min value is not negative
             max = av_val + 1.96 * std_val
 
             # Truncate the array - Contrast Enhancement
-            rgb_8bit[:, :, i][rgb_8bit[:, :, i] > max] = max
-            rgb_8bit[:, :, i][rgb_8bit[:, :, i] < min] = min
+            rgb_8bit[rgb_8bit > max] = max
+            rgb_8bit[rgb_8bit < min] = min
 
             # Convert to 8bits
-            rgb_8bit[:, :, i] = np.divide(rgb_8bit[:, :, i] - min, max - min) * 255
+            rgb_8bit = np.divide(rgb_8bit - min, max - min) * 255
 
         return rgb_8bit
 
