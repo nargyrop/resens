@@ -508,7 +508,7 @@ class Raster:
         try:
             assert self.__dtype(in_arr) in ('uint8', 'uint16', 'float32')
         except AssertionError:
-            in_arr.astype(self.__dtype(in_arr)[1])
+            in_arr = in_arr.astype(self.__dtype(in_arr)[1])
 
         # Resize array
         if out_shape:

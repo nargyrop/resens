@@ -8,6 +8,6 @@ setup(name='pyscisys',
       author_email='nikos.argyropoulos@scisys.co.uk',
       license='',
       packages=['pyscisys'],
-      install_requires=['gdal', 'numpy', 'opencv-python'],
+      install_requires=['gdal', 'numpy', 'opencv-contrib-python-nonfree'],
       python_requires='>=3.6.5',
       zip_safe=False)
