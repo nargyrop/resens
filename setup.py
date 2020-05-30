@@ -1,13 +1,13 @@
 from setuptools import setup
 
-setup(name='pyscisys',
+setup(name='pyna',
       version='0.2',
-      description='Scisys EO python package',
-      url='http://spcbs-svrep0/argyropoulos_n/pyscisys.git',
+      description='Nikos Argyropoulos EO python package',
+      url='https://www.nargyrop.me',
       author='Nikos Argyropoulos',
-      author_email='nikos.argyropoulos@scisys.co.uk',
+      author_email='n.argiropeo@gmail.com',
       license='',
-      packages=['pyscisys'],
-      install_requires=['gdal', 'numpy', 'opencv-python'],
+      packages=['pyna'],
+      install_requires=['gdal', 'numpy', 'opencv-contrib-python-nonfree'],
       python_requires='>=3.6.5',
       zip_safe=False)
