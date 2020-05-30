@@ -1,4 +1,4 @@
-# pyscisys
+# pyna
 
 A repository to host all the scripts we created and use often into a package.
 
