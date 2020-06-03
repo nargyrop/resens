@@ -89,7 +89,7 @@ class Raster:
 
         transf = obj.GetGeoTransform()
         proj = obj.GetProjection()
-        srs = osr.SpatialReference(wkt=d.GetProjection())
+        srs = osr.SpatialReference(wkt=proj)
         epsg = srs.GetAttrValue('AUTHORITY', 1)
 
         return array, transf, proj, epsg
