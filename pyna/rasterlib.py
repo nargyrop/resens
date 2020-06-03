@@ -86,10 +86,6 @@ class Raster:
         if len(array.shape) == 3:
             array = np.einsum('ijk->jki', array)
         array = array.astype(self.__dtype(array)[1])
-        transf = obj.GetGeoTransform()
-        proj = obj.GetProjection()
-        srs = osr.SpatialReference(wkt=proj)
-        epsg = srs.GetAttrValue('AUTHORITY', 1)
 
         return array, transf, proj, epsg
 
