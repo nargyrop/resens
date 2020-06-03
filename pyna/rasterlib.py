@@ -87,6 +87,11 @@ class Raster:
             array = np.einsum('ijk->jki', array)
         array = array.astype(self.__dtype(array)[1])
 
+        transf = obj.GetGeoTransform()
+        proj = obj.GetProjection()
+        srs = osr.SpatialReference(wkt=d.GetProjection())
+        epsg = srs.GetAttrValue('AUTHORITY', 1)
+
         return array, transf, proj, epsg
 
     def load_from_zip(self, zipf_path, req_files, extension):
