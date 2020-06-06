@@ -87,6 +87,11 @@ class Raster:
             array = np.einsum('ijk->jki', array)
         array = array.astype(self.__dtype(array)[1])
 
+        transf = obj.GetGeoTransform()
+        proj = obj.GetProjection()
+        srs = osr.SpatialReference(wkt=proj)
+        epsg = srs.GetAttrValue('AUTHORITY', 1)
+
         return array, transf, proj, epsg
 
     def load_from_zip(self, zipf_path, req_files, extension):
@@ -124,13 +129,11 @@ class Raster:
 
         # Create dictionaries to store the data
         band_dict = {}
-        key_ls = []
 
         for img in img_ls:
             try:
                 # Find which of the req files fits the current, create the dict key and store it in the keys' list
                 key_in = os.path.split(img)[1].split('.')[0]
-                key_ls.append(key_in)
 
                 # Load image, get metadata and store to dictionary
                 array, transf, proj, epsg = self.load_image(os.path.join(ziphandler, img))
@@ -138,7 +141,7 @@ class Raster:
             except AttributeError:
                 pass
 
-        return band_dict, key_ls
+        return band_dict
 
     def write_image(self, out_arr, output_img, transf, prj, compression=True):
         """
