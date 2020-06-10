@@ -8,6 +8,6 @@ setup(name='pyna',
       author_email='n.argiropeo@gmail.com',
       license='',
       packages=['pyna'],
-      install_requires=['gdal', 'numpy', 'opencv-contrib-python-nonfree'],
+      install_requires=['gdal', 'numpy', 'opencv-contrib-python'],
       python_requires='>=3.6.5',
       zip_safe=False)
