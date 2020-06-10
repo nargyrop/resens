@@ -251,13 +251,13 @@ class Raster:
                 land_mask = np.zeros(shape)
 
             # First create an empty file matching the input array's dimensions
-            self.write_image(land_mask, land_mask_path,  land_mask_fname, transf, prj, True)
+            self.write_image(land_mask, os.path.join(land_mask_path,  land_mask_fname), transf, prj, True)
 
             # Then burn the shapefile on the raster file
             os.system(f'gdal_rasterize -burn 1 {land_shp} {os.path.join(land_mask_path, f"{land_mask_fname}.tif")}')
 
         # Load the land mask array
-        land_mask_arr, _, _, _ = self.load_image(land_mask_path, f"{land_mask_fname}.tif")
+        land_mask_arr, _, _, _ = self.load_image(os.path.join(land_mask_path, f"{land_mask_fname}.tif"))
 
         if dilation:
             if dilation_iters:
