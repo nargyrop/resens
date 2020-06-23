@@ -443,15 +443,15 @@ class Raster:
         up_down = as_strided(padded, shape=up_down_shape, strides=strides)
         left_right = as_strided(padded, shape=left_right_shape, strides=strides)
         rest = as_strided(padded, shape=others_shape, strides=strides)
-        self.__flush_var(padded)
+        self.remove_var(padded)
 
         # Get the median value of each sub-window, then flatten them
         up_down_meds = np.apply_over_axes(filter_op, up_down, pr_axes).astype(up_down.dtype)
-        self.__flush_var(up_down)
+        self.remove_var(up_down)
         left_right_meds = np.apply_over_axes(filter_op, left_right, pr_axes).astype(left_right.dtype)
-        self.__flush_var(left_right)
+        self.remove_var(left_right)
         rest_meds = np.apply_over_axes(filter_op, rest, pr_axes).astype(rest.dtype)
-        self.__flush_var(rest)
+        self.remove_var(rest)
 
         # Compute filter for subwindows
         up_meds = up_down_meds[:-radius, :].reshape(reshape_shape)
@@ -465,11 +465,11 @@ class Raster:
 
         # Stack the flatten arrays and find where the minimum value is for each pixel
         stacked = np.vstack((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
-        self.__flush_var((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
+        self.remove_var((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
         subtr = np.absolute(stacked - in_arr.reshape(reshape_shape))
-        self.__flush_var(in_arr)
+        self.remove_var(in_arr)
         inds = np.argmin(subtr, axis=0)  # Get indices where the subtr is minimum along the 0 axis
-        self.__flush_var(subtr)
+        self.remove_var(subtr)
 
         # Get the output pixel values
         if not bands:
@@ -478,7 +478,7 @@ class Raster:
             filt = np.take_along_axis(stacked, np.expand_dims(inds, axis=0), axis=0).reshape(sy, sx, bands)
             # filt = np.flip(filt, 2)  # Flip channel order from BGR to RGB
 
-        self.__flush_var(stacked)
+        self.remove_var(stacked)
 
         return filt
 
