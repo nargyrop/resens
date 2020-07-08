@@ -2,6 +2,7 @@ import os
 import cv2
 import osr
 import gdal
+import math
 import zipfile
 import numpy as np
 
@@ -12,23 +13,7 @@ class Raster:
         pass
 
     @staticmethod
-    def remove_var(var):
-        """
-        Method to remove unwanted objects from memory
-
-        :type var: Object or List/Tuple of objects
-        :param var: Object or List/Tuple of objects to be removed from memory
-
-        :return: Nothing
-        """
-        if isinstance(var, (list, tuple)):
-            for i in var:
-                i = None
-        else:
-            var = None
-
-    @staticmethod
-    def __dtype(in_arr):
+    def find_dtype(in_arr):
         """
         Method to retrieve an array's data type.
 
@@ -39,7 +24,7 @@ class Raster:
         """
 
         # Initialize a dictionary to store the numpy attribute for each dtype
-        dtype_dict = {'int8': np.int8, 'int16': np.int16, 'uint8': np.uint8, 'uint16': np.uint16, 'float32': np.float32}
+        dtype_dict = {"int8": np.int8, "int16": np.int16, "uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
 
         # Get minimum and maximum values in the array and the value of one random element
         min_val = in_arr.min()
@@ -48,23 +33,23 @@ class Raster:
         if np.array_equal(in_arr, in_arr.astype(np.int)):
             if max_val < 256:
                 if min_val < 0:
-                    arrtype = 'int8'
+                    arrtype = "int8"
                     npdtype = dtype_dict[arrtype]
                 else:
-                    arrtype = 'uint8'
+                    arrtype = "uint8"
                     npdtype = dtype_dict[arrtype]
             elif 256 <= max_val <= 65535:
                 if min_val < 0:
-                    arrtype = 'int16'
+                    arrtype = "int16"
                     npdtype = dtype_dict[arrtype]
                 else:
-                    arrtype = 'uint16'
+                    arrtype = "uint16"
                     npdtype = dtype_dict[arrtype]
             else:
-                arrtype = 'float32'
+                arrtype = "float32"
                 npdtype = dtype_dict[arrtype]
         else:
-            arrtype = 'float32'
+            arrtype = "float32"
             npdtype = dtype_dict[arrtype]
 
         return arrtype, npdtype
@@ -84,13 +69,13 @@ class Raster:
         obj = gdal.Open(img_path)
         array = obj.ReadAsArray()
         if len(array.shape) == 3:
-            array = np.einsum('ijk->jki', array)
-        array = array.astype(self.__dtype(array)[1])
+            array = np.einsum("ijk->jki", array)
+        array = array.astype(self.find_dtype(array)[1])
 
         transf = obj.GetGeoTransform()
         proj = obj.GetProjection()
         srs = osr.SpatialReference(wkt=proj)
-        epsg = srs.GetAttrValue('AUTHORITY', 1)
+        epsg = srs.GetAttrValue("AUTHORITY", 1)
 
         return array, transf, proj, epsg
 
@@ -112,11 +97,11 @@ class Raster:
         """
 
         # Initialize gdal zip file handler
-        ziphandler = '/vsizip/' + zipf_path
+        ziphandler = "/vsizip/" + zipf_path
 
         # Read zip file
         try:
-            archive = zipfile.ZipFile(zipf_path, 'r')
+            archive = zipfile.ZipFile(zipf_path, "r")
         except zipfile.BadZipfile:
             pass
 
@@ -133,7 +118,7 @@ class Raster:
         for img in img_ls:
             try:
                 # Find which of the req files fits the current, create the dict key and store it in the keys' list
-                key_in = os.path.split(img)[1].split('.')[0]
+                key_in = os.path.split(img)[1].split(".")[0]
 
                 # Load image, get metadata and store to dictionary
                 array, transf, proj, epsg = self.load_image(os.path.join(ziphandler, img))
@@ -153,7 +138,8 @@ class Raster:
         :type output_img: String
         :param output_img: Output image path
 
-        :type transf: Tuple of floats :param transf: Geometric Transformation (Format: (Xo, pixel size in X
+        :type transf: Tuple of floats
+        :param transf: Geometric Transformation (Format: (Xo, pixel size in X
         direction, X-axis skew, Yo, Y-axis skew, pixel size in Y direction))
 
         :type prj: String
@@ -169,14 +155,14 @@ class Raster:
         """
 
         # Dtype Dictionary to be used for output
-        gdal_dtype = {'uint8': gdal.GDT_Byte,
-                      'uint16': gdal.GDT_UInt16,
-                      'int8': gdal.GDT_Byte,
-                      'int16': gdal.GDT_Int16,
-                      'float32': gdal.GDT_Float32}
+        gdal_dtype = {"uint8": gdal.GDT_Byte,
+                      "uint16": gdal.GDT_UInt16,
+                      "int8": gdal.GDT_Byte,
+                      "int16": gdal.GDT_Int16,
+                      "float32": gdal.GDT_Float32}
 
         # Get array type
-        out_arr = out_arr.astype(self.__dtype(out_arr)[0])
+        out_arr = out_arr.astype(self.find_dtype(out_arr)[0])
 
         try:
             # Determine the shape of the array and the number of bands
@@ -196,15 +182,15 @@ class Raster:
 
         # Set output options for compression
         if compression:
-            opt_ls = ['TILED=YES', 'COMPRESS=DEFLATE', 'NUM_THREADS=ALL_CPUS']
+            opt_ls = ["TILED=YES", "COMPRESS=DEFLATE", "ZLEVEL=9", "NUM_THREADS=ALL_CPUS", "BIGTIFF=YES"]
         else:
             opt_ls = []
 
-        if not output_img.endswith('.tif'):
+        if not output_img.endswith(".tif"):
             output_img = f"{output_img}.tif"
-        driver = gdal.GetDriverByName('GTiff')
+        driver = gdal.GetDriverByName("GTiff")
         dataset = driver.Create(output_img, out_arr.shape[col_ind], out_arr.shape[row_ind], nband,
-                                gdal_dtype[self.__dtype(out_arr)[0]], options=opt_ls)
+                                gdal_dtype[self.find_dtype(out_arr)[0]], options=opt_ls)
         dataset.SetGeoTransform(transf)
         dataset.SetProjection(prj)
 
@@ -248,7 +234,7 @@ class Raster:
 
         # Set up the output filename in a way that it won't be needed to create a land mask for arrays with the same
         # extents
-        land_mask_fname = 'land_mask_{}_{}_{}_{}_{}_{}'.format(round(transf[0], 3), round(transf[3], 3), transf[1],
+        land_mask_fname = "land_mask_{}_{}_{}_{}_{}_{}".format(round(transf[0], 3), round(transf[3], 3), transf[1],
                                                                abs(transf[-1]), shape[1], shape[0])
 
         if not os.path.exists(os.path.join(land_mask_path, f"{land_mask_fname}.tif")):
@@ -308,7 +294,7 @@ class Raster:
         # Get window radius, padded array and strides
         ksize += 1 - ksize % 2  # Make sure window size is an odd number
         radius = ksize // 2
-        padded = np.pad(in_arr, radius, 'reflect')
+        padded = np.pad(in_arr, radius, "reflect")
         try:
             assert len(in_arr.shape) == 2
             sy, sx = in_arr.shape
@@ -399,7 +385,7 @@ class Raster:
 
         return sliced_array
 
-    def swf(self, in_arr, ksize=None, filter_op='mean'):
+    def swf(self, in_arr, ksize=None, filter_op="mean"):
         """
         Method to apply a pixel-by-pixel median or mean filter using the side window technique.
 
@@ -417,13 +403,13 @@ class Raster:
         from numpy.lib.stride_tricks import as_strided
 
         # Available filter operations
-        filter_dict = {'median': np.median, 'mean': np.mean}
+        filter_dict = {"median": np.median, "mean": np.mean}
         filter_op = filter_dict[filter_op]
 
         # Get window radius, padded array and strides
         ksize += 1 - ksize % 2  # Make sure window size is an odd number
         radius = ksize // 2  # Window radius
-        padded = np.pad(in_arr, radius, 'reflect')  # Pad array using the radius
+        padded = np.pad(in_arr, radius, "reflect")  # Pad array using the radius
         strides = padded.strides + padded.strides
 
         # Parameters that depend on the input array
@@ -452,15 +438,15 @@ class Raster:
         up_down = as_strided(padded, shape=up_down_shape, strides=strides)
         left_right = as_strided(padded, shape=left_right_shape, strides=strides)
         rest = as_strided(padded, shape=others_shape, strides=strides)
-        self.remove_var(padded)
+        del padded
 
         # Get the median value of each sub-window, then flatten them
         up_down_meds = np.apply_over_axes(filter_op, up_down, pr_axes).astype(up_down.dtype)
-        self.remove_var(up_down)
+        del up_down
         left_right_meds = np.apply_over_axes(filter_op, left_right, pr_axes).astype(left_right.dtype)
-        self.remove_var(left_right)
+        del left_right
         rest_meds = np.apply_over_axes(filter_op, rest, pr_axes).astype(rest.dtype)
-        self.remove_var(rest)
+        del rest
 
         # Compute filter for subwindows
         up_meds = up_down_meds[:-radius, :].reshape(reshape_shape)
@@ -474,11 +460,11 @@ class Raster:
 
         # Stack the flatten arrays and find where the minimum value is for each pixel
         stacked = np.vstack((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
-        self.remove_var((up_meds, down_meds, right_meds, left_meds, nw_meds, sw_meds, ne_meds, se_meds))
+        del up_meds; del down_meds; del right_meds ;del left_meds; del nw_meds; del sw_meds; del ne_meds; del se_meds
         subtr = np.absolute(stacked - in_arr.reshape(reshape_shape))
-        self.remove_var(in_arr)
+        del in_arr
         inds = np.argmin(subtr, axis=0)  # Get indices where the subtr is minimum along the 0 axis
-        self.remove_var(subtr)
+        del subtr
 
         # Get the output pixel values
         if not bands:
@@ -487,7 +473,7 @@ class Raster:
             filt = np.take_along_axis(stacked, np.expand_dims(inds, axis=0), axis=0).reshape(sy, sx, bands)
             # filt = np.flip(filt, 2)  # Flip channel order from BGR to RGB
 
-        self.remove_var(stacked)
+        del stacked
 
         return filt
 
@@ -506,7 +492,8 @@ class Raster:
         :type in_pix: Float/Int
         :param in_pix: Input pixel size. Provide instead of out_shape. For non-square pixels, provide a tuple (psy, psx)
 
-        :type out_pix: Float/Int :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape.
+        :type out_pix: Float/Int
+        :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape.
         For non-square pixels, provide a tuple (psy, psx)
 
         :return: Resampled array, Adjusted Geo-transformation
@@ -514,9 +501,9 @@ class Raster:
 
         # Make sure in_arr is of a supported dtype
         try:
-            assert self.__dtype(in_arr) in ('uint8', 'uint16', 'float32')
+            assert self.find_dtype(in_arr) in ("uint8", "uint16", "float32")
         except AssertionError:
-            in_arr = in_arr.astype(self.__dtype(in_arr)[1])
+            in_arr = in_arr.astype(self.find_dtype(in_arr)[1])
 
         # Resize array
         if out_shape:
@@ -553,7 +540,7 @@ class Raster:
         # Also, resample if needed to the largest size
 
         rgb_8bit = rgb_stack.copy()
-        self.remove_var(rgb_stack)
+        del rgb_stack
 
         try:
             for i in range(rgb_8bit.shape[2]):
@@ -589,18 +576,80 @@ class Raster:
 
     """Phase Correlation"""
 
+    def kernel_disp(self, img1, img2):
+        """
+        Method to get the mean displacement within a tile.
+
+        :type img1: 2D Array
+        :param img1: Image1 tile
+
+        :type img2: 2D Array
+        :param img2: Image2 tile
+
+        :return: Mean subpixel displacement
+        """
+
+        # Phase correlation
+        fft_img1 = np.fft.fft2(img1)  # FFT
+        fft_img2 = np.fft.fft2(img2)
+        conj_img2 = np.ma.conjugate(fft_img2)  # Complex conjugate
+        R_12 = fft_img1 * conj_img2  # Cross-power spectrum
+        R_12 /= np.absolute(R_12)
+        disp_map_12 = np.fft.ifft2(R_12).real  # Normalized cross-correlation
+
+        # Estimate mean displacement in pixels for each band pair
+        mean_disp = np.mean(self.estimate_disp(disp_map_12))
+
+        return mean_disp
+
+    def phase_correlation(self, img1, img2, ksize=3, transf=(0, 1, 0, 0, 0, -1)):
+        """
+        Wrapper method to estimate subpixel displacement between 2 grayscale images.
+
+        :type img1: 2D Array
+        :param img1: Grayscale image array
+
+        :type img2: 2D Array
+        :param img2: Grayscale image array
+
+        :type ksize: Int
+        :param ksize: Kernel size
+
+        :type transf: Tuple
+        :param transf: Geo-transformation tuple
+
+        :return: Subpixel displacement map,  geo-transformation tuple
+        """
+
+        # Histogram equalization to enhance results
+        cv2.equalizeHist(img1, img1)
+        cv2.equalizeHist(img2, img2)
+
+        # Adjust geographic transformation for pixel size
+        new_tr = (transf[0], transf[1] * ksize, 0, transf[3], 0, transf[5] * ksize)
+
+        # Get tiles for each band
+        img1_wins = self.get_tiles(in_arr=img1, ksize=ksize)
+        img2_wins = self.get_tiles(in_arr=img2, ksize=ksize)
+        iter_rows = min((img1_wins.shape[0], img2_wins.shape[0]))
+        iter_cols = min((img1_wins.shape[1], img2_wins.shape[1]))
+
+        # Get displacement map
+        disp_map = np.array([[self.kernel_disp(img1_wins[i][j], img2_wins[i][j])
+                              for j in range(iter_cols)] for i in range(iter_rows)])
+
+        return disp_map, new_tr
+
     @staticmethod
     def estimate_disp(disp_map):
         """
         Method to estimate subpixel displacement.
 
-        :type disp_map: Array
+        :type disp_map: 2D Array
         :param disp_map: Displacement map obtained from the phase_correlation method
 
         :return: Displacement value
         """
-
-        import math
 
         nrow, ncol = disp_map.shape  # Get # of rows in correlation surface
         peak_y, peak_x = np.unravel_index(np.argmax(disp_map, axis=None), disp_map.shape)
@@ -624,98 +673,44 @@ class Raster:
         dy_denom = 2 * (2 * np.log(disp_map[peak_y, peak_x]) - np.log(disp_map[y_aft, peak_x]) - np.log(
             disp_map[y_bef, peak_x]))
         dy = dy_num / dy_denom  # subpixel motion in y direction (North/South)
+
         if math.isnan(dy):
             dy = 0.0
-
         if np.abs(peak_x) > disp_map.shape[1] / 2:
             peak_x = peak_x - disp_map.shape[1] + 1  # convert x offsets > ws/2 to negative offsets
         if np.abs(peak_y) > disp_map.shape[0] / 2:
             peak_y = peak_y - disp_map.shape[0] + 1  # convert y offsets > ws/2 to negative offsets
+
         disx = peak_x + dx
         disy = peak_y + dy
-
         dis = np.sqrt(disx ** 2 + disy ** 2)
 
         return float(dis > 0.71) * dis
 
-    def kernel_disp(self, red_tile, green_tile, blue_tile):
+    @staticmethod
+    def multiband2grayscale(img):
         """
-        Method to get the mean displacement within an RGB tile.
+        Function to convert point coordinates to geojson format.
 
-        :type red_tile: 2D Array
-        :param red_tile: Red band tile
+        :type img: 3D Array
+        :param img: Multichannel image array.
 
-        :type green_tile: 2D Array
-        :param green_tile: Green band tile
-
-        :type blue_tile: 2D Array
-        :param blue_tile: Blue band tile
-
-        :return: Mean subpixel displacement
+        :return: Grayscale image
         """
+        try:
+            assert img.ndim == 3
+        except AssertionError:
+            return img
 
-        # Phase correlation
-        G_r = np.fft.fft2(red_tile)  # FFT
-        G_g = np.fft.fft2(green_tile)
-        G_b = np.fft.fft2(blue_tile)
-        conj_b = np.ma.conjugate(G_b)  # Complex conjugate
-        conj_g = np.ma.conjugate(G_g)
-        R_rg = G_r * conj_g  # Cross-power spectrum
-        R_bg = G_b * conj_g
-        R_rb = G_r * conj_b
-        R_rg /= np.absolute(R_rg)
-        R_bg /= np.absolute(R_bg)
-        R_rb /= np.absolute(R_rb)
-        disp_map_rg = np.fft.ifft2(R_rg).real  # Normalized cross-correlation
-        disp_map_bg = np.fft.ifft2(R_bg).real
-        disp_map_rb = np.fft.ifft2(R_rb).real
+        img_sum = np.sum(img, axis=2)  # Sum of all channel pixels
 
-        # Estimate absolute displacement in pixels for each band pair
-        disp_rg = self.estimate_disp(disp_map_rg)
-        disp_bg = self.estimate_disp(disp_map_bg)
-        disp_rb = self.estimate_disp(disp_map_rb)
+        # Compute weight for each channel
+        img_weights_arr = np.dstack([np.divide(img[..., i], img_sum) for i in range(img.shape[2])])
+        channel_weights = np.mean(img_weights_arr, axis=(0, 1))
+        while channel_weights.sum() > 1.0:
+            channel_weights -= channel_weights * 0.01  # Make sure the weights sum to 1.0
 
-        # Estimate weighted mean displacement
-        mean_disp = np.mean((disp_bg, disp_rb, disp_rg))
+        # Get grayscale image
+        gray = np.sum(img * channel_weights, axis=2).astype(np.uint8)
 
-        return mean_disp
-
-    def phase_correlation(self, rgb_stack, ksize=3, transf=(0, 1, 0, 0, 0, -1)):
-        """
-        Wrapper method to estimate subpixel displacement in an RGB stack.
-
-        :type rgb_stack: 3D Array
-        :param rgb_stack: RGB stack array
-
-        :type ksize: Int
-        :param ksize: Kernel size
-
-        :type transf: Tuple
-        :param transf: Geo-transformation tuple
-
-        :return: Subpixel displacement map,  geo-transformation tuple
-        """
-
-        # Get individual bands
-        red = rgb_stack[..., 0]
-        green = rgb_stack[..., 0]
-        blue = rgb_stack[..., 0]
-
-        # Histogram equalization to enhance results
-        cv2.equalizeHist(red, red)
-        cv2.equalizeHist(green, green)
-        cv2.equalizeHist(blue, blue)
-
-        # New geographic transformation
-        new_tr = (transf[0], transf[1] * ksize, 0, transf[3], 0, transf[5] * ksize)
-
-        # Get tiles for each band
-        red_wins = self.get_tiles(in_arr=red, ksize=ksize)
-        green_wins = self.get_tiles(in_arr=green, ksize=ksize)
-        blue_wins = self.get_tiles(in_arr=blue, ksize=ksize)
-
-        # Get displacement map
-        disp_map = np.array([[self.kernel_disp(red_wins[i][j], green_wins[i][j], blue_wins[i][j])
-                             for j in range(blue_wins.shape[1])] for i in range(blue_wins.shape[0])])
-
-        return disp_map, new_tr
+        return gray
