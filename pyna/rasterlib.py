@@ -68,7 +68,7 @@ class Raster:
 
         obj = gdal.Open(img_path)
         array = obj.ReadAsArray()
-        if len(array.shape) == 3:
+        if array.ndims == 3:
             array = np.einsum("ijk->jki", array)
         array = array.astype(self.find_dtype(array)[1])
 
@@ -296,7 +296,7 @@ class Raster:
         radius = ksize // 2
         padded = np.pad(in_arr, radius, "reflect")
         try:
-            assert len(in_arr.shape) == 2
+            assert in_arr.ndims == 2
             sy, sx = in_arr.shape
             nbands = False
         except AssertionError:
@@ -362,7 +362,7 @@ class Raster:
                 step_x = ksize_x
                 step_y = ksize_y
         try:
-            assert len(in_arr.shape) == 2
+            assert in_arr.ndims == 2
             sy, sx = in_arr.shape
             nbands = False
         except AssertionError:
@@ -414,7 +414,7 @@ class Raster:
 
         # Parameters that depend on the input array
         try:
-            assert len(in_arr.shape) == 2
+            assert in_arr.ndims == 2
             sy, sx = in_arr.shape
             bands = False
             reshape_shape = -1
@@ -677,15 +677,15 @@ class Raster:
         if math.isnan(dy):
             dy = 0.0
         if np.abs(peak_x) > disp_map.shape[1] / 2:
-            peak_x = peak_x - disp_map.shape[1] + 1  # convert x offsets > ws/2 to negative offsets
+            peak_x = peak_x - disp_map.shape[1]  # convert x offsets > ws/2 to negative offsets
         if np.abs(peak_y) > disp_map.shape[0] / 2:
-            peak_y = peak_y - disp_map.shape[0] + 1  # convert y offsets > ws/2 to negative offsets
+            peak_y = peak_y - disp_map.shape[0]  # convert y offsets > ws/2 to negative offsets
 
         disx = peak_x + dx
         disy = peak_y + dy
         dis = np.sqrt(disx ** 2 + disy ** 2)
 
-        return float(dis > 0.71) * dis
+        return dis
 
     @staticmethod
     def multiband2grayscale(img):
