@@ -68,7 +68,7 @@ class Raster:
 
         obj = gdal.Open(img_path)
         array = obj.ReadAsArray()
-        if array.ndims == 3:
+        if array.ndim == 3:
             array = np.einsum("ijk->jki", array)
         array = array.astype(self.find_dtype(array)[1])
 
@@ -296,7 +296,7 @@ class Raster:
         radius = ksize // 2
         padded = np.pad(in_arr, radius, "reflect")
         try:
-            assert in_arr.ndims == 2
+            assert in_arr.ndim == 2
             sy, sx = in_arr.shape
             nbands = False
         except AssertionError:
@@ -362,7 +362,7 @@ class Raster:
                 step_x = ksize_x
                 step_y = ksize_y
         try:
-            assert in_arr.ndims == 2
+            assert in_arr.ndim == 2
             sy, sx = in_arr.shape
             nbands = False
         except AssertionError:
@@ -414,7 +414,7 @@ class Raster:
 
         # Parameters that depend on the input array
         try:
-            assert in_arr.ndims == 2
+            assert in_arr.ndim == 2
             sy, sx = in_arr.shape
             bands = False
             reshape_shape = -1
