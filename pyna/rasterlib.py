@@ -124,7 +124,7 @@ class Raster:
                 array, transf, proj, epsg = self.load_image(os.path.join(ziphandler, img))
                 band_dict[key_in] = [array, transf, proj, epsg]
             except AttributeError:
-                pass
+                raise AttributeError(f"Error loading {img}")
 
         return band_dict
 
