@@ -299,6 +299,8 @@ class Raster:
             ksize += 1 - ksize % 2  # Make sure window size is an odd number
             radius = ksize // 2
             in_arr = np.pad(in_arr, radius, "reflect")
+        else:
+            radius = 0
         
         try:
             assert in_arr.ndim == 2
