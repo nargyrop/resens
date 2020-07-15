@@ -269,7 +269,7 @@ class Raster:
     """Fast Sliding Windows and Filters"""
 
     @staticmethod
-    def get_sliding_win(in_arr, ksize, step_x=1, step_y=1):
+    def get_sliding_win(in_arr, ksize, step_x=1, step_y=1, pad=True):
 
         """
         Efficient method that returns sliced arrays for sliding windows.
@@ -286,15 +286,20 @@ class Raster:
         :type step_y: Int
         :param step_y: Step or stride size in the y-direction (def=1)
 
+        :type step_y: Bool
+        :param step_y: Flag to enable padding equal to the radius of ksize
+
         :return: 4D array matching the input array's size. Each element is an array matching the window size+bands
         """
 
         from numpy.lib.stride_tricks import as_strided
 
         # Get window radius, padded array and strides
-        ksize += 1 - ksize % 2  # Make sure window size is an odd number
-        radius = ksize // 2
-        padded = np.pad(in_arr, radius, "reflect")
+        if pad:
+            ksize += 1 - ksize % 2  # Make sure window size is an odd number
+            radius = ksize // 2
+            in_arr = np.pad(in_arr, radius, "reflect")
+        
         try:
             assert in_arr.ndim == 2
             sy, sx = in_arr.shape
@@ -304,18 +309,18 @@ class Raster:
 
         # Calculate output shape
         if not nbands:
-            strides = (padded.strides[0] * step_y, padded.strides[1] * step_x) + padded.strides
+            strides = (in_arr.strides[0] * step_y, in_arr.strides[1] * step_x) + in_arr.strides
             out_shape = ((sy - ksize + 2 * radius + step_y) // step_y,
                          (sx - ksize + 2 * radius + step_x) // step_x,
                          ksize, ksize)
         else:
-            strides = (padded.strides[0] * step_y, padded.strides[1] * step_x, padded.strides[2]) + padded.strides
+            strides = (in_arr.strides[0] * step_y, in_arr.strides[1] * step_x, in_arr.strides[2]) + in_arr.strides
             out_shape = ((sy - ksize + 2 * radius + step_y) // step_y,
                          (sx - ksize + 2 * radius + step_x) // step_x, 1,
                          ksize, ksize, nbands)
 
         # Slice the padded array using strides
-        sliced_array = as_strided(padded, shape=out_shape, strides=strides)
+        sliced_array = as_strided(in_arr, shape=out_shape, strides=strides)
 
         return sliced_array
 
