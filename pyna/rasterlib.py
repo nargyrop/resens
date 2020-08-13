@@ -128,7 +128,7 @@ class Raster:
 
         return band_dict
 
-    def write_image(self, out_arr, output_img, transf, prj, nodata=None, compression=True):
+    def write_image(self, out_arr, output_img, transf, prj, nodata=None, compression=True, datatype=None):
         """
         Method that writes an array to a georeferenced GeoTIFF file.
 
@@ -151,6 +151,10 @@ class Raster:
         :type compression: Boolean
         :param compression: True to enable compression (default), False to disable
 
+        :type datatype: String
+        :param datatype: Array datatype. Set to None to have the script automatically detect the datatype or select
+        between uint8, uint16, int8, int16, float32.
+
         :return: Nothing
         """
 
@@ -162,7 +166,11 @@ class Raster:
                       "float32": gdal.GDT_Float32}
 
         # Get array type
-        out_arr = out_arr.astype(self.find_dtype(out_arr)[0])
+        if datatype == None:
+            datatype = self.find_dtype(out_arr)[0]
+
+        out_arr = out_arr.astype(datatype)
+        gdal_datatype = gdal_dtype[datatype]
 
         try:
             # Determine the shape of the array and the number of bands
@@ -190,7 +198,7 @@ class Raster:
             output_img = f"{output_img}.tif"
         driver = gdal.GetDriverByName("GTiff")
         dataset = driver.Create(output_img, out_arr.shape[col_ind], out_arr.shape[row_ind], nband,
-                                gdal_dtype[self.find_dtype(out_arr)[0]], options=opt_ls)
+                                gdal_datatype, options=opt_ls)
         dataset.SetGeoTransform(transf)
         dataset.SetProjection(prj)
 
