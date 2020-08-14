@@ -190,9 +190,9 @@ class Raster:
 
         # Set output options for compression
         if compression:
-            opt_ls = ["TILED=YES", "COMPRESS=DEFLATE", "ZLEVEL=9", "NUM_THREADS=ALL_CPUS", "BIGTIFF=YES"]
+            opt_ls = ["TILED=YES", "COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9", "NUM_THREADS=ALL_CPUS", "BIGTIFF=YES"]
         else:
-            opt_ls = []
+            opt_ls = ["TILED=YES", "NUM_THREADS=ALL_CPUS", "BIGTIFF=YES"]
 
         if not output_img.endswith(".tif"):
             output_img = f"{output_img}.tif"
