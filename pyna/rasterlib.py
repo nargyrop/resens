@@ -554,10 +554,10 @@ class Raster:
         # Iterate over each array and get min and max corresponding to a 5-95% data truncation
         # Also, resample if needed to the largest size
 
-        rgb_8bit = rgb_stack.copy()
+        rgb_8bit = rgb_stack.astype(np.float32)
         del rgb_stack
 
-        try:
+        if rgb_8bit.ndim == 3:
             for i in range(rgb_8bit.shape[2]):
                 # Get image statistics
                 av_val = np.mean(rgb_8bit[..., i])
@@ -572,7 +572,7 @@ class Raster:
 
                 # Convert to 8bits
                 rgb_8bit[..., i] = np.divide(rgb_8bit[..., i] - min, max - min) * 255
-        except IndexError:
+        else:
             # Get image statistics
             av_val = np.mean(rgb_8bit)
             std_val = np.std(rgb_8bit)
