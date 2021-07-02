@@ -721,11 +721,11 @@ class Raster:
 
         # Compute weight for each channel
         img_weights_arr = np.dstack([np.divide(img[..., i], img_sum) for i in range(img.shape[2])])
-        channel_weights = np.mean(img_weights_arr, axis=(0, 1))
+        channel_weights = np.nanmean(img_weights_arr, axis=(0, 1))
         while channel_weights.sum() > 1.0:
             channel_weights -= channel_weights * 0.01  # Make sure the weights sum to 1.0
 
         # Get grayscale image
-        gray = np.sum(img * channel_weights, axis=2).astype(np.uint8)
+        gray = np.sum(img * channel_weights, axis=2)
 
         return gray
