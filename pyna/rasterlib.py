@@ -73,17 +73,15 @@ class Raster:
         array = array.astype(self.find_dtype(array)[1])
 
         transf = obj.GetGeoTransform()
-
-        # Check that the pixel sizes are of the correct sign
-        transf = list(transf)
-        if transf[1] < 0:
-            transf[1] = abs(transf[1])
-        if transf[-1] > 0:
-            transf[-1] *= -1
-
         proj = obj.GetProjection()
         srs = osr.SpatialReference(wkt=proj)
         epsg = srs.GetAttrValue("AUTHORITY", 1)
+
+        # Check that the pixel sizes are of the correct sign
+        xo, psx, skx, yo, sky, psy = list(transf)
+        if psy > 0:
+            psy *= -1
+        transf = (xo, psx, skx, yo, sky, psy)
 
         return array, transf, proj, epsg
 
@@ -173,8 +171,14 @@ class Raster:
                       "int16": gdal.GDT_Int16,
                       "float32": gdal.GDT_Float32}
 
+        # Check that the pixel sizes are of the correct sign
+        xo, psx, skx, yo, sky, psy = list(transf)
+        if psy > 0:
+            psy *= -1
+        transf = (xo, psx, skx, yo, sky, psy)
+
         # Get array type
-        if datatype == None:
+        if datatype is None:
             datatype = self.find_dtype(out_arr)[0]
 
         out_arr = out_arr.astype(datatype)
