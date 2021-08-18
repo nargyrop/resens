@@ -73,6 +73,14 @@ class Raster:
         array = array.astype(self.find_dtype(array)[1])
 
         transf = obj.GetGeoTransform()
+
+        # Check that the pixel sizes are of the correct sign
+        transf = list(transf)
+        if transf[1] < 0:
+            transf[1] = abs(transf[1])
+        if transf[-1] > 0:
+            transf[-1] *= -1
+
         proj = obj.GetProjection()
         srs = osr.SpatialReference(wkt=proj)
         epsg = srs.GetAttrValue("AUTHORITY", 1)
