@@ -1,10 +1,9 @@
 import os
 import cv2
-import osr
-import gdal
 import math
 import zipfile
 import numpy as np
+from osgeo import gdal, osr
 
 
 class Raster:
