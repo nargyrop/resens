@@ -1,9 +1,15 @@
 from setuptools import setup, find_packages
+from pathlib import Path
+
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 
 setup(
-      name='pyeo',
-      version='0.2',
+      name='resens',
+      version='0.2.1.1',
       description='Raster Processing package for Remote Sensing and Earth Observation',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       url='https://www.nargyrop.com',
       author='Nikos Argyropoulos',
       author_email='n.argiropeo@gmail.com',
