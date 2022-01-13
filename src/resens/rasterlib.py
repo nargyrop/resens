@@ -5,7 +5,7 @@ import math
 import zipfile
 import numpy as np
 from pathlib import Path
-from typing import Union, Dict, Iterable, Tuple
+from typing import Union, Dict, Iterable, Tuple, List
 
 
 class Raster:
@@ -30,8 +30,8 @@ class Raster:
         dtype_dict = {"int8": np.int8, "int16": np.int16, "uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
 
         # Get minimum and maximum values in the array and the value of one random element
-        min_val = in_arr.min()
-        max_val = in_arr.max()
+        min_val = np.min(in_arr)
+        max_val = np.max(in_arr)
 
         if np.array_equal(in_arr, in_arr.astype(np.int)):
             if max_val < 256:
@@ -61,7 +61,7 @@ class Raster:
 
     def load_image(
             self,
-            img_path: Tuple[Path, str],
+            img_path: Union[Path, str],
     ) -> Iterable:
         """
         Method to load an array from a raster file and retrieve the geo-transformation, projection and EPSG of the CRS
@@ -95,8 +95,8 @@ class Raster:
 
     def load_from_zip(
             self,
-            zipf_path: Tuple[Path, str],
-            req_files: Tuple[list, tuple],
+            zipf_path: Union[Path, str],
+            req_files: Union[list, tuple],
             extension: str,
     ) -> Union[Dict, None]:
         """
@@ -146,7 +146,7 @@ class Raster:
                     key_in, = [key for key in req_files if key in img]
 
                     # Load image, get metadata and store to dictionary
-                    array, transf, proj, epsg = self.load_image(ziphandler + zipf_path.joinpath(img))
+                    array, transf, proj, epsg = self.load_image(ziphandler + zipf_path.joinpath(img).as_posix())
                     band_dict[key_in] = [array, transf, proj, epsg]
                 except AttributeError:
                     raise AttributeError(f"Error loading {img}")
@@ -156,10 +156,10 @@ class Raster:
     def write_image(
             self,
             out_arr: np.ndarray,
-            output_img: Tuple[Path, str],
+            output_img: Union[Path, str],
             transf: tuple,
             prj: str,
-            nodata: Tuple[int, float] = None,
+            nodata: Union[int, float] = None,
             compression: bool = True,
             datatype: str = None,
     ):
@@ -254,11 +254,11 @@ class Raster:
 
     def land_masking(
             self,
-            shape: Tuple[tuple, list],
+            shape: Union[tuple, list],
             transf: tuple,
             prj: str,
-            land_shp: Tuple[Path, str],
-            land_mask_path: Tuple[Path, str],
+            land_shp: Union[Path, str],
+            land_mask_path: Union[Path, str],
             dilation: bool = False,
             dilation_iters: int = None,
     ) -> np.ndarray:
@@ -314,26 +314,21 @@ class Raster:
     """Fast Sliding Windows and Filters"""
 
     @staticmethod
-    def get_sliding_win(in_arr, ksize, step_x=1, step_y=1, pad=True):
+    def get_sliding_win(
+            in_arr: np.ndarray,
+            ksize: int,
+            step_x: int = 1,
+            step_y: int = 1,
+            pad: bool = True
+    ) -> np.ndarray:
 
         """
         Efficient method that returns sliced arrays for sliding windows.
-
-        :type in_arr: Array
         :param in_arr: 2D or 3D array
-
-        :type ksize: Int
         :param ksize: Odd integer window size
-
-        :type step_x: Int
         :param step_x: Step or stride size in the x-direction (def=1)
-
-        :type step_y: Int
         :param step_y: Step or stride size in the y-direction (def=1)
-
-        :type pad: Bool
         :param pad: Flag to enable image padding equal to the radius of ksize
-
         :return: 4D array matching the input array's size. Each element is an array matching the window size+bands
         """
 
@@ -372,20 +367,17 @@ class Raster:
         return sliced_array
 
     @staticmethod
-    def get_tiles(in_arr, ksize=None, nblocks=None):
+    def get_tiles(
+            in_arr: np.ndarray,
+            ksize: Union[int, List[int], Tuple[int]] = None,
+            nblocks: int = None
+    ) -> np.ndarray:
 
         """
         Efficient method that returns sliced arrays for sliding windows.
-
-        :type in_arr: Array
         :param in_arr: 2D or 3D array
-
-        :type ksize: Int or List/Tuple
         :param ksize: Integer window size or List/Tuple of window sizes in x and y directions
-
-        :type nblocks: Int
         :param nblocks: Integer number of tiles in which to divide the array or List/Tuple of number ot tiles in x and y directions
-
         :return: 4D array matching the input array's size. Each element is an array matching the window size+bands
         """
 
@@ -437,7 +429,12 @@ class Raster:
 
         return sliced_array
 
-    def swf(self, in_arr, ksize=None, filter_op="mean"):
+    @staticmethod
+    def swf(
+            in_arr: np.ndarray,
+            ksize: int = None,
+            filter_op: str = "mean"
+    ) -> np.ndarray:
         """
         Method to apply a pixel-by-pixel median or mean filter using the side window technique.
 
@@ -538,20 +535,18 @@ class Raster:
 
     """Data Conversion"""
 
-    def resample_array(self, in_arr, out_shape=None, in_pix=None, out_pix=None):
+    def resample_array(
+            self,
+            in_arr: np.ndarray,
+            out_shape: Union[Tuple, List] = None,
+            in_pix: Union[float, int] = None,
+            out_pix: Union[float, int] = None
+    ) -> np.ndarray:
         """
         Method that resamples arrays using the shape or the pixel size.
-
-        :type in_arr: Array
         :param in_arr: 2D/3D Image array
-
-        :type out_shape: Tuple
         :param out_shape: Tuple of output array dimension (e.g. (nrows, ncols))
-
-        :type in_pix: Float/Int
         :param in_pix: Input pixel size. Provide instead of out_shape. For non-square pixels, provide a tuple (psy, psx)
-
-        :type out_pix: Float/Int
         :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape.
         For non-square pixels, provide a tuple (psy, psx)
 
@@ -585,20 +580,19 @@ class Raster:
 
         return resampled
 
-    def rgb16to8(self, rgb_stack):
+    @staticmethod
+    def rgb16to8(
+            rgb_stack: Union[Tuple[np.ndarray], List[np.ndarray]]
+    ) -> np.ndarray:
         """
         Method to convert a 16bit RGB to 8bit with contrast enhancement.
-
-        :type rgb_stack: Tuple/List of arrays
         :param rgb_stack: Tuple/List containing the Red, Green and Blue arrays. Must be same shape.
-
         :return: 8bit RGB array
         """
 
         # Iterate over each array and get min and max corresponding to a 5-95% data truncation
         # Also, resample if needed to the largest size
-
-        rgb_8bit = rgb_stack.astype(np.float32)
+        rgb_8bit = np.dstack(rgb_stack).astype(np.float32)
         del rgb_stack
 
         if rgb_8bit.ndim == 3:
@@ -635,16 +629,15 @@ class Raster:
 
     """Phase Correlation"""
 
-    def kernel_disp(self, img1, img2):
+    def kernel_disp(
+            self,
+            img1: np.ndarray,
+            img2: np.ndarray
+    ) -> np.ndarray:
         """
         Method to get the mean displacement within a tile.
-
-        :type img1: 2D Array
         :param img1: Image1 tile
-
-        :type img2: 2D Array
         :param img2: Image2 tile
-
         :return: Mean subpixel displacement
         """
 
@@ -661,7 +654,13 @@ class Raster:
 
         return mean_disp
 
-    def phase_correlation(self, img1, img2, ksize=3, transf=(0, 1, 0, 0, 0, -1)):
+    def phase_correlation(
+            self,
+            img1: np.ndarray,
+            img2: np.ndarray,
+            ksize: int = 3,
+            transf: Union[Tuple, List] = (0, 1, 0, 0, 0, -1)
+    ) -> Tuple[np.ndarray, Tuple]:
         """
         Wrapper method to estimate subpixel displacement between 2 grayscale images.
 
@@ -700,7 +699,9 @@ class Raster:
         return disp_map, new_tr
 
     @staticmethod
-    def estimate_disp(disp_map):
+    def estimate_disp(
+            disp_map: np.ndarray
+    ) -> np.ndarray:
         """
         Method to estimate subpixel displacement.
 
