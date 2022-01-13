@@ -1,4 +1,4 @@
-# pyna
+# pyeo
 
 A python package that hosts functionality for processing rasters.
 
