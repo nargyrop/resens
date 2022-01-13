@@ -1,9 +1,9 @@
 # pyna
 
-A repository to host all the scripts we created and use often into a package.
+A python package that hosts functionality for processing rasters.
 
 ## Installation
 
 Clone repo and run `python setup.py install`
 
-**Requires python >=3.6**
+**Requires python >=3.8**
