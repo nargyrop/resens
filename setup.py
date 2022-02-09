@@ -19,6 +19,6 @@ setup(
       install_requires=[
             'gdal', 'numpy', 'opencv-python'
       ],
-      python_requires='>=3.8',
+      python_requires='>=3.7',
       zip_safe=False
 )
