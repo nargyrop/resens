@@ -1,3 +1,4 @@
+from ast import Assert
 import math
 import subprocess
 import uuid
@@ -16,7 +17,7 @@ except ImportError:
     from osgeo import gdal
     from osgeo import osr
 
-from .rasteroptions import CO_COMPRESS, CO_NOCOMPRESS, GDAL_DTYPES
+from rasteroptions import CO_COMPRESS, CO_NOCOMPRESS, GDAL_DTYPES
 
 
 class Analysis:
@@ -559,6 +560,22 @@ class Processing:
         same shape.
         :return: 8bit RGB array
         """
+        def _make_8bit(arr: np.ndarray) -> np.ndarray:
+            # Get image statistics
+            av_val = np.mean(arr)
+            std_val = np.std(arr)
+            min_val = av_val - 1.96 * std_val
+            min_val = min_val if min_val >= 0 else 0  # make sure min value is not negative
+            max_val = av_val + 1.96 * std_val
+
+            # Truncate the array - Contrast Enhancement
+            arr[arr > max_val] = max_val
+            arr[arr < min_val] = min_val
+
+            # Convert to 8bits
+            arr = (np.divide(arr - min_val, max_val - min_val) * 255)
+
+            return arr
 
         # Iterate over each array and get min and max corresponding to a 5-95% data
         # truncation
@@ -568,35 +585,10 @@ class Processing:
 
         if rgb_8bit.ndim == 3:
             for i in range(rgb_8bit.shape[2]):
-                # Get image statistics
-                av_val = np.mean(rgb_8bit[..., i])
-                std_val = np.std(rgb_8bit[..., i])
-                min_val = av_val - 1.96 * std_val
-                min_val *= int(min_val >= 0)  # make sure min value is not negative
-                max_val = av_val + 1.96 * std_val
-
-                # Truncate the array - Contrast Enhancement
-                rgb_8bit[..., i][rgb_8bit[..., i] > max_val] = max_val
-                rgb_8bit[..., i][rgb_8bit[..., i] < min_val] = min_val
-
-                # Convert to 8bits
-                rgb_8bit[..., i] = (
-                    np.divide(rgb_8bit[..., i] - min_val, max_val - min_val) * 255
-                )
+                rgb_8bit[..., i] = _make_8bit(rgb_8bit[..., i])
         else:
-            # Get image statistics
-            av_val = np.mean(rgb_8bit)
-            std_val = np.std(rgb_8bit)
-            min_val = av_val - 1.96 * std_val
-            min_val *= int(min_val >= 0)  # make sure min value is not negative
-            max_val = av_val + 1.96 * std_val
-
-            # Truncate the array - Contrast Enhancement
-            rgb_8bit[rgb_8bit > max_val] = max_val
-            rgb_8bit[rgb_8bit < min_val] = min_val
-
             # Convert to 8bits
-            rgb_8bit = np.divide(rgb_8bit - min_val, max_val - min_val) * 255
+            rgb_8bit = _make_8bit(rgb_8bit)
 
         return rgb_8bit
 
@@ -658,16 +650,23 @@ class Processing:
         if pad:
             ksize += 1 - ksize % 2  # Make sure window size is an odd number
             radius = ksize // 2
-            in_arr = np.pad(in_arr, radius, "reflect")
+            pad_widths = [
+                [radius, radius],  # 0-axis padding
+                [radius, radius],  # 1-axis padding
+            ]
+            if in_arr.ndim == 3:
+                pad_widths += [[0, 0]] # 2-axis padding (no padding)
+            in_arr = np.pad(in_arr, pad_widths, "reflect")
         else:
             radius = 0
 
-        try:
-            assert in_arr.ndim == 2
+        if in_arr.ndim == 2:
             sy, sx = in_arr.shape
             nbands = False
-        except AssertionError:
+        elif in_arr.ndim == 3:
             sy, sx, nbands = in_arr.shape
+        else:
+            raise ValueError(f"Incorrect array shape {in_arr.shape}")
 
         # Calculate output shape
         if not nbands:
@@ -743,12 +742,14 @@ class Processing:
                 ksize_y = in_arr.shape[0] // nblocks
                 step_x = ksize_x
                 step_y = ksize_y
-        try:
-            assert in_arr.ndim == 2
+        
+        if in_arr.ndim == 2:
             sy, sx = in_arr.shape
             nbands = False
-        except AssertionError:
+        elif in_arr.ndim == 3:
             sy, sx, nbands = in_arr.shape
+        else:
+            raise ValueError(f"Incorrect array shape {in_arr.shape}")
 
         # Calculate output shape
         if not nbands:
