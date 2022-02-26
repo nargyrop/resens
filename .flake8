@@ -1,0 +1,6 @@
+[flake8]
+ignore = E501, W503, E203
+max-line-length = 90
+exclude =
+    donotuse,
+    data_recorders
