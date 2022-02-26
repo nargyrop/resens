@@ -10,7 +10,7 @@ from rasterlib import Analysis, IO, Processing, Utils
 class TestSum(unittest.TestCase):
 
     def test_load_image(self):
-        arr, transf, proj, epsg = IO.load_image("src/resens/tests/data/sample-bgrn-16bit-small.tif")
+        arr, transf, proj, epsg = IO().load_image("src/resens/tests/data/sample-bgrn-16bit-small.tif")
         self.assertTupleEqual(arr.shape, (1511, 1441, 4), "Array has the correct dimensions")
         self.assertEqual(epsg, "32639", "The correct EPSG code was loaded")
 
@@ -25,7 +25,7 @@ class TestSum(unittest.TestCase):
 
         # Then write a test output image
         output_path = Path(tempfile.gettempdir(), "test_output.tif").as_posix()
-        IO.write_image(
+        IO().write_image(
             out_arr=arr_sample,
             output_img=output_path,
             transformation=transf_sample,
@@ -35,7 +35,7 @@ class TestSum(unittest.TestCase):
         )
 
         # Then load the test output
-        arr_test, transf_test, proj_test, epsg_test = IO.load_image(output_path)
+        arr_test, transf_test, proj_test, epsg_test = IO().load_image(output_path)
 
         # Now check to make sure everything is correct
         self.assertTrue(np.all(arr_sample == arr_test), "Arrays are not equal")
@@ -49,7 +49,7 @@ class TestSum(unittest.TestCase):
         arr_sb = np.random.randint(0, 256, (100, 100))
         arr_mb = np.random.randint(0, 256, (100, 100, 3))
 
-        arr_sb_convs = Processing.get_sliding_win(
+        arr_sb_convs = Processing().get_sliding_win(
             in_arr=arr_sb,
             ksize=3,
             step_x=1,
@@ -62,7 +62,7 @@ class TestSum(unittest.TestCase):
             "Correct convolution number (singleband)"
             )
 
-        arr_mb_convs = Processing.get_sliding_win(
+        arr_mb_convs = Processing().get_sliding_win(
             in_arr=arr_mb,
             ksize=3,
             step_x=1,
@@ -81,7 +81,7 @@ class TestSum(unittest.TestCase):
         arr_sb = np.random.randint(0, 256, (100, 100))
         arr_mb = np.random.randint(0, 256, (100, 100, 3))
 
-        arr_sb_tiles = Processing.get_tiles(
+        arr_sb_tiles = Processing().get_tiles(
             in_arr=arr_sb,
             ksize=3,
         )
@@ -91,7 +91,7 @@ class TestSum(unittest.TestCase):
             "Correct tile number (singleband)"
             )
 
-        arr_mb_tiles = Processing.get_tiles(
+        arr_mb_tiles = Processing().get_tiles(
             in_arr=arr_mb,
             ksize=3,
         )
