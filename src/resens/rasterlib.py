@@ -1,4 +1,3 @@
-from ast import Assert
 import math
 import subprocess
 import uuid
@@ -32,15 +31,9 @@ class Analysis:
         Method to apply a pixel-by-pixel median or mean filter using the side
         window technique.
 
-        :type in_arr: Array
         :param in_arr: 2D/3D array
-
-        :type ksize: Int
         :param ksize: Window size (odd number)
-
-        :type filter_op: String
         :param filter_op: Filter operation to be used (median/mean)
-
         :return: Filtered array
         """
         from numpy.lib.stride_tricks import as_strided
@@ -311,9 +304,7 @@ class IO:
         Method to load an array from a raster file and retrieve the geo-
         transformation, projection and EPSG of the CRS.
 
-        :type img_path: String
         :param img_path: Path to image
-
         :return: tuple containing: Array, geo-transformation, projection, epsg code
         """
 
@@ -348,15 +339,9 @@ class IO:
         Method that loads all the required bands in arrays and saves them to a
         dictionary.
 
-        :type zipf_path: String
         :param zipf_path: Path to zip file
-
-        :type req_files: String or List/Tuple of strings
         :param req_files: List of strings included in the file names (e.g. band numbers)
-
-        :type extension: String
         :param extension: Extension of the target image
-
         :return: Dictionary containing the array, geo-transformation tuple, projection
         and EPSG code of each image.
         List containing the dictionary keys
@@ -430,7 +415,6 @@ class IO:
         :param datatype: Array datatype. Set to None to have the script automatically
         detect the datatype or select
         between uint8, uint16, int8, int16, float32.
-
         :return:
         """
 
@@ -518,7 +502,6 @@ class Processing:
         pixels, provide a tuple (psy, psx)
         :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape.
         For non-square pixels, provide a tuple (psy, psx)
-
         :return: Resampled array, Adjusted Geo-transformation
         """
 
@@ -552,20 +535,23 @@ class Processing:
         return resampled
 
     @staticmethod
-    def rgb16to8(rgb_stack: Union[Tuple[np.ndarray], List[np.ndarray]]) -> np.ndarray:
+    def rgb16to8(nbit_image: np.ndarray) -> np.ndarray:
         """
-        Method to convert a 16bit RGB to 8bit with contrast enhancement.
+        Method to convert any n-Bit image to 8-bit with contrast enhancement
+        (histogram truncation).
 
-        :param rgb_stack: Tuple/List containing the Red, Green and Blue arrays. Must be
-        same shape.
-        :return: 8bit RGB array
+        :param nbit_image: 2D or 3D array
+        :return: 8-bit image
         """
+
         def _make_8bit(arr: np.ndarray) -> np.ndarray:
             # Get image statistics
             av_val = np.mean(arr)
             std_val = np.std(arr)
             min_val = av_val - 1.96 * std_val
-            min_val = min_val if min_val >= 0 else 0  # make sure min value is not negative
+            min_val = (
+                min_val if min_val >= 0 else 0
+            )  # make sure min value is not negative
             max_val = av_val + 1.96 * std_val
 
             # Truncate the array - Contrast Enhancement
@@ -573,24 +559,24 @@ class Processing:
             arr[arr < min_val] = min_val
 
             # Convert to 8bits
-            arr = (np.divide(arr - min_val, max_val - min_val) * 255)
+            arr = np.divide(arr - min_val, max_val - min_val) * 255
 
             return arr
 
         # Iterate over each array and get min and max corresponding to a 5-95% data
         # truncation
         # Also, resample if needed to the largest size
-        rgb_8bit = np.dstack(rgb_stack).astype(np.float32)
-        rgb_stack = None
+        bit8_img = np.dstack(nbit_image).astype(np.float32)
+        nbit_image = None
 
-        if rgb_8bit.ndim == 3:
-            for i in range(rgb_8bit.shape[2]):
-                rgb_8bit[..., i] = _make_8bit(rgb_8bit[..., i])
+        if bit8_img.ndim == 3:
+            for i in range(bit8_img.shape[2]):
+                bit8_img[..., i] = _make_8bit(bit8_img[..., i])
         else:
             # Convert to 8bits
-            rgb_8bit = _make_8bit(rgb_8bit)
+            bit8_img = _make_8bit(bit8_img)
 
-        return rgb_8bit
+        return bit8_img
 
     @staticmethod
     def multiband2grayscale(img: np.ndarray) -> np.ndarray:
@@ -655,7 +641,7 @@ class Processing:
                 [radius, radius],  # 1-axis padding
             ]
             if in_arr.ndim == 3:
-                pad_widths += [[0, 0]] # 2-axis padding (no padding)
+                pad_widths += [[0, 0]]  # 2-axis padding (no padding)
             in_arr = np.pad(in_arr, pad_widths, "reflect")
         else:
             radius = 0
@@ -742,7 +728,7 @@ class Processing:
                 ksize_y = in_arr.shape[0] // nblocks
                 step_x = ksize_x
                 step_y = ksize_y
-        
+
         if in_arr.ndim == 2:
             sy, sx = in_arr.shape
             nbands = False
@@ -784,7 +770,6 @@ class Utils:
         Method to retrieve an array's data type.
 
         :param in_arr: Image Array
-
         :return: Array type, numpy dtype
         """
 
