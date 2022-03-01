@@ -535,7 +535,7 @@ class Processing:
         return resampled
 
     @staticmethod
-    def rgb16to8(nbit_image: np.ndarray) -> np.ndarray:
+    def convert8bit(nbit_image: np.ndarray) -> np.ndarray:
         """
         Method to convert any n-Bit image to 8-bit with contrast enhancement
         (histogram truncation).
