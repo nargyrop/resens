@@ -1,14 +1,11 @@
 import sys
 import tempfile
 import unittest
+from ast import Mod
 from pathlib import Path
 
 import numpy as np
-
-try:
-    from rasterlib import IO, Processing
-except ImportError:
-    sys.path.append(Path(sys.path[0]).parent.as_posix())
+from resens.rasterlib import IO, Processing
 
 
 class TestSum(unittest.TestCase):
