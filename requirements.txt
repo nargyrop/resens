@@ -1,6 +1,4 @@
-GDAL==3.0.2
-numpy==1.21.2
-opencv_python==4.5.5.62
-osgeo==0.0.1
-osr==0.0.1
-setuptools==58.0.4
+GDAL>=3.0.2
+numpy>=1.21.2
+opencv_python>=4.5.5.62
+setuptools>=58.0.4
