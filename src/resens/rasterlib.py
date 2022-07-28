@@ -13,10 +13,9 @@ try:
     import gdal
     import osr
 except ImportError:
-    from osgeo import gdal
-    from osgeo import osr
+    from osgeo import gdal, osr
 
-from rasteroptions import CO_COMPRESS, CO_NOCOMPRESS, GDAL_DTYPES
+from resens.rasteroptions import CO_COMPRESS, CO_NOCOMPRESS, GDAL_DTYPES
 
 
 class Analysis:
@@ -539,7 +538,7 @@ class Processing:
         return resampled
 
     @staticmethod
-    def rgb16to8(nbit_image: np.ndarray) -> np.ndarray:
+    def convert8bit(nbit_image: np.ndarray) -> np.ndarray:
         """
         Method to convert any n-Bit image to 8-bit with contrast enhancement
         (histogram truncation).
