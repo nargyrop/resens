@@ -382,6 +382,10 @@ class IO:
                     # and store it in the keys' list
                     (key_in,) = [key for key in req_files if key in img]
 
+                    if key_in in band_dict:
+                        print(f"WARNING: Multiple files were found for key: {key_in}!")
+                        continue
+
                     # Load image, get metadata and store to dictionary
                     array, transf, proj, epsg = self.load_image(
                         ziphandler + zipf_path.joinpath(img).as_posix()
