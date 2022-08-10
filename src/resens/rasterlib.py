@@ -333,6 +333,7 @@ class IO:
         zipf_path: Union[Path, str],
         req_files: Union[list, tuple],
         extension: str,
+        group: str = "",
     ) -> Union[Dict, None]:
         """
         Method that loads all the required bands in arrays and saves them to a
@@ -341,6 +342,7 @@ class IO:
         :param zipf_path: Path to zip file
         :param req_files: List of strings included in the file names (e.g. band numbers)
         :param extension: Extension of the target image
+        :param group: Extra string to search for.
         :return: Dictionary containing the array, geo-transformation tuple, projection
         and EPSG code of each image.
         List containing the dictionary keys
@@ -369,7 +371,8 @@ class IO:
             img_ls = [
                 f
                 for f in archive.namelist()
-                if f.endswith(extension) and any(x in f for x in req_files)
+                if f.endswith(extension) and any(x in f for x in req_files) \
+                    and group in f
             ]
 
             # Create dictionaries to store the data
