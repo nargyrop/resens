@@ -498,6 +498,7 @@ class Processing:
         out_shape: Union[Tuple, List] = None,
         in_pix: Union[float, int] = None,
         out_pix: Union[float, int] = None,
+        interpolation: str = "linear"
     ) -> np.ndarray:
         """
         Method that resamples arrays using the shape or the pixel size.
@@ -508,8 +509,15 @@ class Processing:
         pixels, provide a tuple (psy, psx)
         :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape.
         For non-square pixels, provide a tuple (psy, psx)
+        :param interpolation: Interpolation method. Choose between linear, cubic, lanczos.
         :return: Resampled array, Adjusted Geo-transformation
         """
+
+        inter_method = {
+            "linear": cv2.INTER_LINEAR,
+            "cubic": cv2.INTER_CUBIC,
+            "lanczos": cv2.INTER_LANCZOS4
+        }
 
         # Make sure in_arr is of a supported dtype
         try:
@@ -520,7 +528,10 @@ class Processing:
         # Resize array
         if out_shape:
             if not in_arr.shape == out_shape:
-                resampled = cv2.resize(in_arr, out_shape)
+                resampled = cv2.resize(
+                    in_arr, 
+                    out_shape,
+                    interpolation=inter_method[interpolation])
             else:
                 resampled = in_arr
         elif in_pix and out_pix:
@@ -529,12 +540,24 @@ class Processing:
             ):
                 # Square pixels
                 scalr = in_pix / out_pix
-                resampled = cv2.resize(in_arr, None, fx=scalr, fy=scalr)
+                resampled = cv2.resize(
+                    in_arr,
+                    None,
+                    fx=scalr,
+                    fy=scalr,
+                    interpolation=inter_method[interpolation]
+                    )
             else:
                 # Rectangular pixels
                 scalrx = in_pix[1] / out_pix[1]
                 scalry = in_pix[0] / out_pix[0]
-                resampled = cv2.resize(in_arr, None, fx=scalrx, fy=scalry)
+                resampled = cv2.resize(
+                    in_arr,
+                    None,
+                    fx=scalrx,
+                    fy=scalry,
+                    interpolation=inter_method[interpolation]
+                    )
         else:
             resampled = None
 
