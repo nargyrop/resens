@@ -309,14 +309,14 @@ class IO:
 
         if isinstance(img_path, Path):
             img_path = img_path.as_posix()
-        obj = gdal.Open(img_path)
-        array = obj.ReadAsArray()
+        dataset = gdal.Open(img_path)
+        array = dataset.ReadAsArray()
         if array.ndim == 3:
             array = np.einsum("ijk->jki", array)
         array = array.astype(Utils.find_dtype(array)[1])
 
-        transf = obj.GetGeoTransform()
-        proj = obj.GetProjection()
+        transf = dataset.GetGeoTransform()
+        proj = dataset.GetProjection()
         srs = osr.SpatialReference(wkt=proj)
         epsg = srs.GetAttrValue("AUTHORITY", 1)
 
@@ -325,6 +325,8 @@ class IO:
         if psy > 0:
             psy *= -1
         transf = (xo, psx, skx, yo, sky, psy)
+
+        dataset = None
 
         return array, transf, proj, epsg
 
