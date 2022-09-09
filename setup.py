@@ -2,6 +2,25 @@ from pathlib import Path
 
 from setuptools import find_packages, setup
 
+# Check for dependencies
+install_requires = []
+try:
+    import numpy
+except ImportError:
+    install_requires.append("numpy")
+try:
+    try:
+        import gdal
+    except ImportError:
+        from osgeo import gdal
+except ImportError:
+    install_requires.append("GDAL>=3.*")
+try:
+    import cv2
+except ImportError:
+    install_requires.append("opencv-python")
+
+
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
@@ -19,4 +38,5 @@ setup(
     package_dir={"": "src"},
     python_requires=">=3.7",
     zip_safe=False,
+    install_requires=install_requires
 )
