@@ -7,16 +7,16 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="resens",
-    version="0.4.0",
+    version="0.4.1",
     description="Raster Processing package for Remote Sensing and Earth Observation",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.nargyrop.com",
     author="Nikos Argyropoulos",
-    author_email="n.argiropeo@gmail.com",
+    author_email="n.argiropgeo@gmail.com",
     license="MIT",
-    packages=find_packages("resens"),
-    package_dir={"": "resens"},
+    packages=find_packages("src"),
+    package_dir={"": "src"},
     python_requires=">=3.7",
     zip_safe=False,
 )

@@ -3,7 +3,7 @@ from typing import List, Tuple, Union
 import cv2
 import numpy as np
 
-import resens
+from . import utils
 
 
 def resample_array(
@@ -34,9 +34,9 @@ def resample_array(
 
     # Make sure in_arr is of a supported dtype
     try:
-        assert resens.utils.find_dtype(in_arr) in ("uint8", "uint16", "float32")
+        assert utils.find_dtype(in_arr) in ("uint8", "uint16", "float32")
     except AssertionError:
-        in_arr = in_arr.astype(resens.utils.find_dtype(in_arr)[1])
+        in_arr = in_arr.astype(utils.find_dtype(in_arr)[1])
 
     # Resize array
     if out_shape:

@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from numpy import int8, short, single, uint8, ushort
 
-import resens
+from . import io
 
 
 def find_dtype(
@@ -95,7 +95,7 @@ def shapefile_masking(
     if not mask_outpath.exists():
         # Write empty raster
         mask_arr = np.zeros(shape[:2], dtype=np.int8)
-        resens.io.write_image(
+        io.write_image(
             mask_arr,
             mask_outpath.as_posix(),
             transformation,
@@ -116,7 +116,7 @@ def shapefile_masking(
         ).stdout.decode("utf-8")
 
     # Load the mask array
-    mask_arr, _, _, _ = resens.io.load_image(mask_outpath.as_posix())
+    mask_arr, _, _, _ = io.io.load_image(mask_outpath.as_posix())
 
     # Dilate the mask
     if dilation:

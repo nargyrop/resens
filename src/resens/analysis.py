@@ -4,7 +4,7 @@ from typing import List, Tuple, Union
 import cv2
 import numpy as np
 
-import resens
+from . import processing
 
 
 def swf(
@@ -192,8 +192,8 @@ def phase_correlation(
     new_tr = (transf[0], transf[1] * ksize, 0, transf[3], 0, transf[5] * ksize)
 
     # Get tiles for each band
-    img1_wins = resens.processing.get_tiles(in_arr=img1, ksize=ksize)
-    img2_wins = resens.processing.get_tiles(in_arr=img2, ksize=ksize)
+    img1_wins = processing.get_tiles(in_arr=img1, ksize=ksize)
+    img2_wins = processing.get_tiles(in_arr=img2, ksize=ksize)
     iter_rows = min((img1_wins.shape[0], img2_wins.shape[0]))
     iter_cols = min((img1_wins.shape[1], img2_wins.shape[1]))
 

@@ -3,14 +3,9 @@ from pathlib import Path
 from typing import Dict, Iterable, Tuple, Union
 
 import numpy as np
+from osgeo import gdal, osr
 
-try:
-    import gdal
-    import osr
-except ImportError:
-    from osgeo import gdal, osr
-
-import resens
+from . import rasteroptions, utils
 
 
 def load_image(
@@ -30,7 +25,7 @@ def load_image(
     array = dataset.ReadAsArray()
     if array.ndim == 3:
         array = np.einsum("ijk->jki", array)
-    array = array.astype(resens.utils.find_dtype(array)[1])
+    array = array.astype(utils.find_dtype(array)[1])
 
     transf = dataset.GetGeoTransform()
     proj = dataset.GetProjection()
@@ -149,10 +144,10 @@ def write_image(
 
     # Get array type
     if datatype is None:
-        datatype, _ = resens.utils.find_dtype(out_arr)
+        datatype, _ = utils.find_dtype(out_arr)
 
     out_arr = out_arr.astype(datatype)
-    gdal_datatype = resens.rasteroptions.GDAL_DTYPES[datatype]
+    gdal_datatype = rasteroptions.GDAL_DTYPES[datatype]
 
     try:
         # Determine the shape of the array and the number of bands
@@ -183,7 +178,7 @@ def write_image(
         out_arr.shape[row_ind],
         nband,
         gdal_datatype,
-        options=resens.rasteroptions.CO_COMPRESS if compression else resens.rasteroptions.CO_NOCOMPRESS,
+        options=rasteroptions.CO_COMPRESS if compression else rasteroptions.CO_NOCOMPRESS,
     )
     dataset.SetGeoTransform(transformation)
     dataset.SetProjection(projection)
