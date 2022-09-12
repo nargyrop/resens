@@ -10,32 +10,56 @@ from . import rasteroptions, utils
 
 def load_image(
         img_path: Union[Path, str],
+        bounds: Tuple = None,
     ) -> Iterable:
     """
     Method to load an array from a raster file and retrieve the geo-
     transformation, projection and EPSG of the CRS.
 
     :param img_path: Path to image
+    :param bounds: Tuple containing bounds to be used for clipping the image. 
+    Should be formatted as ((xmin, xmax), (xmax, ymin)).
     :return: tuple containing: Array, geo-transformation, projection, epsg code
     """
+
+    kwargs = {}
 
     if isinstance(img_path, Path):
         img_path = img_path.as_posix()
     dataset = gdal.Open(img_path)
-    array = dataset.ReadAsArray()
-    if array.ndim == 3:
-        array = np.einsum("ijk->jki", array)
-    array = array.astype(utils.find_dtype(array)[1])
 
+    # Get geographic information
     transf = dataset.GetGeoTransform()
     proj = dataset.GetProjection()
     srs = osr.SpatialReference(wkt=proj)
     epsg = srs.GetAttrValue("AUTHORITY", 1)
 
+    # If bounds have been passed, calculate the extents for clipping
+    if bounds:
+        (xmin, ymax), (xmax, ymin) = bounds
+        xoff = int(round((xmin - transf[0]) / transf[1]))
+        yoff = int(round((ymax - transf[3]) / transf[5]))
+        xsize = int(round((xmax - transf[0]) / transf[1])) - xoff
+        ysize = int(round((ymin - transf[3]) / transf[5])) - yoff
+
+        kwargs["xoff"] = xoff
+        kwargs["yoff"] = yoff
+        kwargs["xsize"] = xsize
+        kwargs["ysize"] = ysize
+
+    # Read array
+    array = dataset.ReadAsArray(**kwargs)
+    if array.ndim == 3:
+        array = np.einsum("ijk->jki", array)
+    array = array.astype(utils.find_dtype(array)[1])
+
     # Check that the pixel sizes are of the correct sign
     xo, psx, skx, yo, sky, psy = list(transf)
     if psy > 0:
         psy *= -1
+    if bounds:
+        xo = float(xmin)
+        yo = float(ymax)
     transf = (xo, psx, skx, yo, sky, psy)
 
     dataset = None
@@ -47,7 +71,8 @@ def load_from_zip(
     req_files: Union[list, tuple],
     extension: str,
     group: str = "",
-) -> Union[Dict, None]:
+    bounds: Tuple = None
+    ) -> Union[Dict, None]:
     """
     Method that loads all the required bands in arrays and saves them to a
     dictionary.
@@ -56,6 +81,8 @@ def load_from_zip(
     :param req_files: List of strings included in the file names (e.g. band numbers)
     :param extension: Extension of the target image
     :param group: Extra string to search for.
+    :param bounds: Tuple containing bounds to be used for clipping the image. 
+    Should be formatted as ((xmin, xmax), (xmax, ymin)).
     :return: Dictionary containing the array, geo-transformation tuple, projection
     and EPSG code of each image.
     List containing the dictionary keys
@@ -103,7 +130,8 @@ def load_from_zip(
 
                 # Load image, get metadata and store to dictionary
                 array, transf, proj, epsg = load_image(
-                    ziphandler + zipf_path.joinpath(img).as_posix()
+                    ziphandler + zipf_path.joinpath(img).as_posix(),
+                    bounds
                 )
                 band_dict[key_in] = [array, transf, proj, epsg]
             except AttributeError:
@@ -194,5 +222,6 @@ def write_image(
             if nodata:
                 out_band.SetNoDataValue(nodata)
             out_band.WriteArray(out_arr)
-
+        out_band = None
+    
     dataset = None
