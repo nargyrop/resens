@@ -31,7 +31,7 @@ def find_dtype(
 
     # Get minimum and maximum values in the array and the value of one random element
     min_val = np.min(in_arr)
-    max_val = np.max(in_arr)
+    max_val = np.max(abs(in_arr))
 
     if np.array_equal(in_arr, in_arr.astype(np.int)):
         if max_val < 256:
@@ -82,15 +82,21 @@ def shapefile_masking(
     :param compression: True to enable compression (default), False to disable.
     :return: Binary mask array
     """
+    remove_mask = False
 
     # Set up the output filename in a way that it won't be needed to create a
     # mask for arrays with the same extents
-    if isinstance(polygon_shp, str):
-        polygon_shp = Path(polygon_shp)
-    if isinstance(mask_outpath, str):
+    polygon_shp = Path(polygon_shp)
+    if not polygon_shp.exists():
+        raise FileNotFoundError(f"Polygon shapefile does not exist at {polygon_shp.as_posix()}.")
+    if mask_outpath:
         mask_outpath = Path(mask_outpath)
-    if mask_outpath.suffix != ".tif":
-        mask_outpath = mask_outpath.joinpath(f"land_mask_{str(uuid.uuid4())}.tif")
+        if mask_outpath.suffix != ".tif":
+            mask_outpath = mask_outpath.joinpath(f"land_mask_{str(uuid.uuid4())}.tif")
+    else:
+        mask_outpath = Path(f"land_mask_{str(uuid.uuid4())}.tif")
+        remove_mask = True
+    mask_outpath.parent.mkdir(exist_ok=True, parents=True)
 
     if not mask_outpath.exists():
         # Write empty raster
@@ -116,7 +122,7 @@ def shapefile_masking(
         ).stdout.decode("utf-8")
 
     # Load the mask array
-    mask_arr, _, _, _ = io.io.load_image(mask_outpath.as_posix())
+    mask_arr, transf, proj, _ = io.load_image(mask_outpath.as_posix())
 
     # Dilate the mask
     if dilation:
@@ -132,5 +138,9 @@ def shapefile_masking(
                 cv2.getStructuringElement(cv2.MORPH_ELLIPSE, ksize=(3, 3)),
                 iterations=1,
             )
+        io.write_image(mask_arr, mask_outpath.as_posix(), transf, proj)
 
+    if remove_mask:
+        mask_outpath.unlink()
+    
     return mask_arr

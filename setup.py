@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from setuptools import find_packages, setup
+from setuptools import setup
 
 this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="resens",
-    version="0.4.3.2",
+    version="0.4.3.3",
     description="Raster Processing package for Remote Sensing and Earth Observation",
     long_description=long_description,
     long_description_content_type="text/markdown",
