@@ -102,22 +102,23 @@ def convert8bit(nbit_image: np.ndarray) -> np.ndarray:
         # Convert to 8bits
         arr = np.divide(arr - min_val, max_val - min_val) * 255
 
-        return arr
+        return arr.astype(np.uint8)
 
     # Iterate over each array and get min and max corresponding to a 5-95% data
     # truncation
-    # Also, resample if needed to the largest size
-    bit8_img = np.dstack(nbit_image).astype(np.float32)
+    if isinstance(nbit_image, (list, tuple)):
+        bit8_img = np.dstack(nbit_image)
+    bit8_img = nbit_image.astype(np.float32)
     nbit_image = None
 
     if bit8_img.ndim == 3:
         for i in range(bit8_img.shape[2]):
-            bit8_img[..., i] = _make_8bit(bit8_img[..., i])
+            bit8_img[:, :, i] = _make_8bit(bit8_img[:, :, i])
     else:
         # Convert to 8bits
         bit8_img = _make_8bit(bit8_img)
 
-    return bit8_img
+    return np.round(bit8_img)
 
 def multiband2grayscale(img: np.ndarray) -> np.ndarray:
     """
