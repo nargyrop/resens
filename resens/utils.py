@@ -1,11 +1,13 @@
-import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Tuple, Type, Union
 
 import cv2
+import geopandas as gpd
 import numpy as np
 from numpy import int8, short, single, uint8, ushort
+from osgeo import gdal, ogr, gdalconst
 
 from . import io
 
@@ -72,54 +74,67 @@ def shapefile_masking(
     Rasterize a polygons shapefile and create a raster mask.
 
     :param polygon_shp: Absolute path to land polygon shapefile
-    :param mask_outpath: Absolute path (including filename) to output raster mask
     :param shape: Input array's size including channels (e.g. (640, 480, 3))
     :param transformation: Geographic transformation tuple
     :param projection: CRS Projection
+    :param mask_outpath: Absolute path (including filename) to output raster mask
     :param burn_value: Value to burn to output raster
     :param dilation: Flag to enable dilating the land mask
     :param dilation_iters: Number of dilation iterations
     :param compression: True to enable compression (default), False to disable.
     :return: Binary mask array
     """
-    remove_mask = False
-
     # Set up the output filename in a way that it won't be needed to create a
     # mask for arrays with the same extents
     polygon_shp = Path(polygon_shp)
+    remove_files = []
     if not polygon_shp.exists():
         raise FileNotFoundError(f"Polygon shapefile does not exist at {polygon_shp.as_posix()}.")
+    elif "s3" in polygon_shp.as_posix():
+        gdf = gpd.read_file(polygon_shp)
+
+        # Write temporary file
+        polygon_shp = Path(tempfile.NamedTemporaryFile().name)
+        gdf.to_file(polygon_shp)
+        remove_files.append(polygon_shp)
+
+    # Make sure the shapefile and image are using the same CRS
+    gdf = gpd.read_file(polygon_shp)
+    out_epsg = gdf.crs.from_wkt(projection).to_epsg()
+    if gdf.crs.to_epsg() != out_epsg:
+        gdf = gdf.to_crs(epsg=out_epsg)
+        
+        # Write temporary file
+        polygon_shp = Path(tempfile.NamedTemporaryFile().name)
+        gdf.to_file(polygon_shp)
+        remove_files.append(polygon_shp)
+
     if mask_outpath:
         mask_outpath = Path(mask_outpath)
         if mask_outpath.suffix != ".tif":
             mask_outpath = mask_outpath.joinpath(f"land_mask_{str(uuid.uuid4())}.tif")
     else:
-        mask_outpath = Path(f"land_mask_{str(uuid.uuid4())}.tif")
-        remove_mask = True
+        mask_outpath = Path(tempfile.NamedTemporaryFile().name).with_suffix(".tif")
+        remove_files.append(mask_outpath)
     mask_outpath.parent.mkdir(exist_ok=True, parents=True)
 
-    if not mask_outpath.exists():
-        # Write empty raster
-        mask_arr = np.zeros(shape[:2], dtype=np.int8)
-        io.write_image(
-            mask_arr,
-            mask_outpath.as_posix(),
-            transformation,
-            projection,
-            compression,
-        )
+    # Write empty raster and load the dataset
+    mask_arr = np.zeros(shape[:2], dtype=np.int8)
+    io.write_image(
+        mask_arr,
+        mask_outpath.as_posix(),
+        transformation,
+        projection,
+        compression,
+    )
+    target_ds = gdal.Open(mask_outpath.as_posix(), gdalconst.GA_Update)
 
-        # Rasterization
-        _ = subprocess.run(
-            [
-                "gdal_rasterize",
-                "-burn",
-                str(burn_value),
-                polygon_shp.as_posix(),
-                mask_outpath.as_posix(),
-            ],
-            stdout=subprocess.PIPE,
-        ).stdout.decode("utf-8")
+    # Load shapefile layers
+    shp_ds = ogr.Open(polygon_shp.as_posix())
+    shp_lyr = shp_ds.GetLayer()
+
+    # Rasterization
+    gdal.RasterizeLayer(target_ds, [1], shp_lyr, burn_values=[burn_value])
 
     # Load the mask array
     mask_arr, transf, proj, _ = io.load_image(mask_outpath.as_posix())
@@ -139,8 +154,16 @@ def shapefile_masking(
                 iterations=1,
             )
         io.write_image(mask_arr, mask_outpath.as_posix(), transf, proj)
-
-    if remove_mask:
-        mask_outpath.unlink()
+    
+    for fil in remove_files:
+        try:
+            if fil.is_file():
+                mask_outpath.unlink()
+            else:
+                for child in fil.iterdir():
+                    child.unlink()
+                fil.rmdir()
+        except Exception:
+            pass
     
     return mask_arr
