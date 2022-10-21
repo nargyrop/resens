@@ -60,7 +60,7 @@ def find_dtype(
     return arrtype, npdtype
 
 def shapefile_masking(
-    polygon_shp: Union[Path, str],
+    polygon_shp: str,
     shape: Union[tuple, list],
     transformation: tuple,
     projection: str,
@@ -86,17 +86,18 @@ def shapefile_masking(
     """
     # Set up the output filename in a way that it won't be needed to create a
     # mask for arrays with the same extents
-    polygon_shp = Path(polygon_shp)
     remove_files = []
-    if not polygon_shp.exists():
-        raise FileNotFoundError(f"Polygon shapefile does not exist at {polygon_shp.as_posix()}.")
-    elif "s3" in polygon_shp.as_posix():
+    if "s3" in polygon_shp:
         gdf = gpd.read_file(polygon_shp)
 
         # Write temporary file
-        polygon_shp = Path(tempfile.NamedTemporaryFile().name)
+        polygon_shp = tempfile.NamedTemporaryFile().name
         gdf.to_file(polygon_shp)
         remove_files.append(polygon_shp)
+    elif not polygon_shp.exists():
+        raise FileNotFoundError(f"Polygon shapefile does not exist at {polygon_shp.as_posix()}.")
+    
+    polygon_shp = Path(polygon_shp)
 
     # Make sure the shapefile and image are using the same CRS
     gdf = gpd.read_file(polygon_shp)
