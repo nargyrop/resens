@@ -94,7 +94,7 @@ def shapefile_masking(
         polygon_shp = tempfile.NamedTemporaryFile().name
         gdf.to_file(polygon_shp)
         remove_files.append(polygon_shp)
-    elif not polygon_shp.exists():
+    elif not Path(polygon_shp).exists():
         raise FileNotFoundError(f"Polygon shapefile does not exist at {polygon_shp.as_posix()}.")
     
     polygon_shp = Path(polygon_shp)
@@ -136,6 +136,7 @@ def shapefile_masking(
 
     # Rasterization
     gdal.RasterizeLayer(target_ds, [1], shp_lyr, burn_values=[burn_value])
+    target_ds = None
 
     # Load the mask array
     mask_arr, transf, proj, _ = io.load_image(mask_outpath.as_posix())
