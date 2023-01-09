@@ -24,6 +24,6 @@ setup(
         "GDAL>=3.*",
         "opencv-python==4.6.0.66",
         "geopandas==0.11.1",
-        "setuptools==58.0.4"
+        "setuptools==65.5.1"
     ]
 )
