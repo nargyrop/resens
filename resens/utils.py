@@ -35,7 +35,7 @@ def find_dtype(
     min_val = np.min(in_arr)
     max_val = np.max(abs(in_arr))
 
-    if np.array_equal(in_arr, in_arr.astype(np.int)):
+    if np.array_equal(in_arr, in_arr.astype(np.int_)):
         if max_val < 256:
             if min_val < 0:
                 arrtype = "int8"
