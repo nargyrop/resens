@@ -18,7 +18,7 @@ def load_image(
 
     :param img_path: Path to image
     :param bounds: Tuple containing bounds to be used for clipping the image. 
-    Should be formatted as ((xmin, xmax), (xmax, ymin)).
+    Should be formatted as ((xmin, ymax), (xmax, ymin)).
     :return: tuple containing: Array, geo-transformation, projection, epsg code
     """
 
@@ -37,10 +37,19 @@ def load_image(
     # If bounds have been passed, calculate the extents for clipping
     if bounds:
         (xmin, ymax), (xmax, ymin) = bounds
-        xoff = int(round((xmin - transf[0]) / transf[1]))
-        yoff = int(round((ymax - transf[3]) / transf[5]))
-        xsize = int(round((xmax - transf[0]) / transf[1])) - xoff
-        ysize = int(round((ymin - transf[3]) / transf[5])) - yoff
+        xo, px, _, yo, _, py = transf
+        xoff = int(round((xmin - xo) / px))
+        yoff = int(round((ymax - yo) / py))
+        xsize = int(round((xmax - xo) / px)) - xoff
+        ysize = int(round((ymin - yo) / py)) - yoff
+
+        if xsize < 0 or ysize < 0:
+            if px == py:
+                raise ValueError("Negative dimensions encountered when cropping. \
+                Image transformation is invalid.")
+            else:
+                raise ValueError("Negative dimensions encountered when cropping. \
+                    Check bound coordinates.")
 
         kwargs["xoff"] = xoff
         kwargs["yoff"] = yoff
