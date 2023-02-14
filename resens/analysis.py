@@ -143,6 +143,9 @@ def kernel_disp(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
     :return: Mean subpixel displacement
     """
 
+    if np.all(img1 == 0) or np.all(img2 == 0):
+        return 0
+
     # Phase correlation
     fft_img1 = np.fft.fft2(img1)  # FFT
     fft_img2 = np.fft.fft2(img2)
@@ -163,6 +166,7 @@ def phase_correlation(
     ksize: int = 3,
     eq_histogram: bool = None,
     transf: Union[Tuple, List] = None,
+    use_sliding_tiles: bool = False,
 ) -> Tuple[np.ndarray, Tuple]:
     """
     Wrapper method to estimate subpixel displacement between 2 grayscale
@@ -173,6 +177,8 @@ def phase_correlation(
     :param ksize: Kernel size
     :param eq_histogram: Enable histogram equalization
     :param transf: Geo-transformation tuple
+    :param use_sliding_tiles: Flag to enable using sliding windows instead 
+    of tiles
     :return: Subpixel displacement map,  geo-transformation tuple
     """
     if img1.ndim > 2:
@@ -188,25 +194,41 @@ def phase_correlation(
         cv2.equalizeHist(img1, img1)
         cv2.equalizeHist(img2, img2)
 
-    # Adjust geographic transformation for pixel size
-    new_tr = (transf[0], transf[1] * ksize, 0, transf[3], 0, transf[5] * ksize)
 
     # Get tiles for each band
-    img1_wins = processing.get_tiles(in_arr=img1, ksize=ksize)
-    img2_wins = processing.get_tiles(in_arr=img2, ksize=ksize)
+    if use_sliding_tiles:
+        img1_wins = processing.get_sliding_win(in_arr=img1, ksize=ksize)
+        img2_wins = processing.get_sliding_win(in_arr=img2, ksize=ksize)
+        new_tr = transf
+    else:
+        img1_wins = processing.get_tiles(in_arr=img1, ksize=ksize)
+        img2_wins = processing.get_tiles(in_arr=img2, ksize=ksize)
+        
+        # Adjust geographic transformation for pixel size
+        new_tr = (transf[0], transf[1] * ksize, 0, transf[3], 0, transf[5] * ksize)
+    
     iter_rows = min((img1_wins.shape[0], img2_wins.shape[0]))
     iter_cols = min((img1_wins.shape[1], img2_wins.shape[1]))
 
+    # Only process tiles that are not completely black
+    # flatten the tile arrays
+    img1_wins = img1_wins.reshape(-1, ksize, ksize)
+    img2_wins = img2_wins.reshape(-1, ksize, ksize)
+    good_locs_img1 = np.where(
+        np.any(img1_wins.reshape(-1, ksize ** 2) != 0, axis=1)
+        )[0]
+    good_locs_img2 = np.where(
+        np.any(img2_wins.reshape(-1, ksize ** 2) != 0, axis=1)
+        )[0]
+    common_good_locs = set(good_locs_img1).intersection(set(good_locs_img2))
+
     # Get displacement map
-    disp_map = np.array(
-        [
-            [
-                kernel_disp(img1_wins[i][j], img2_wins[i][j])
-                for j in range(iter_cols)
-            ]
-            for i in range(iter_rows)
-        ]
-    )
+    disp_map = np.zeros((iter_rows, iter_cols), dtype=np.float16).flatten()
+    for loc in common_good_locs:
+        disp_map[loc] = np.round(kernel_disp(img1_wins[loc], img2_wins[loc]), 1)
+    
+    # Bring back to correct shape
+    disp_map = disp_map.reshape((iter_rows, iter_cols))
 
     return disp_map, new_tr
 
