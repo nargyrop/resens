@@ -195,14 +195,17 @@ def get_sliding_win(
         raise ValueError(f"Incorrect array shape {in_arr.shape}")
 
     # Calculate output shape
+    y_size = int(np.floor((sy + 2 * radius - ksize) / step_y) + 1)
+    x_size = int(np.floor((sx + 2 * radius - ksize) / step_x) + 1)
+
     if not nbands:
         strides = (
             in_arr.strides[0] * step_y,
             in_arr.strides[1] * step_x,
         ) + in_arr.strides
         out_shape = (
-            (sy - ksize + 2 * radius + step_y) // step_y,
-            (sx - ksize + 2 * radius + step_x) // step_x,
+            y_size,
+            x_size,
             ksize,
             ksize,
         )
@@ -213,12 +216,8 @@ def get_sliding_win(
             in_arr.strides[2],
         ) + in_arr.strides
         out_shape = (
-            (sy - ksize + 2 * radius + step_y) // step_y,
-            (sx - ksize + 2 * radius + step_x) // step_x,
-            1,
-            ksize,
-            ksize,
-            nbands,
+            y_size, x_size, 1,
+            ksize, ksize, nbands
         )
 
     # Slice the padded array using strides
@@ -230,6 +229,7 @@ def get_tiles(
     in_arr: np.ndarray,
     ksize: Union[int, List[int], Tuple[int]] = None,
     nblocks: int = None,
+    pad: bool = True
 ) -> np.ndarray:
     """
     Efficient method that returns sliced arrays for sliding windows.
@@ -239,6 +239,7 @@ def get_tiles(
     directions
     :param nblocks: Integer number of tiles in which to divide the array or
     List/Tuple of number ot tiles in x and y directions
+    :param pad: Flag to enable image padding equal to the radius of ksize
     :return: 4D array matching the input array's size. Each element is an array
     matching the window size+bands
     """
@@ -267,6 +268,16 @@ def get_tiles(
             ksize_y = in_arr.shape[0] // nblocks
             step_x = ksize_x
             step_y = ksize_y
+    
+    # Get window radius, padded array and strides
+    if pad:
+        pad_widths = [
+            [0, ksize - in_arr.shape[0] % ksize],  # 0-axis padding
+            [0, ksize - in_arr.shape[1] % ksize],  # 1-axis padding
+        ]
+        if in_arr.ndim == 3:
+            pad_widths += [[0, 0]]  # 2-axis padding (no padding)
+        in_arr = np.pad(in_arr, pad_widths, "reflect")
 
     if in_arr.ndim == 2:
         sy, sx = in_arr.shape
