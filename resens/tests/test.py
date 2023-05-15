@@ -8,12 +8,12 @@ import osgeo as _
 from resens import io, processing
 
 os.environ["PROJ_LIB"] = Path(_.__path__[0]).joinpath("data/proj").as_posix()
-
+base_path = Path(__file__).parent
 
 class TestSum(unittest.TestCase):
     def test_load_image(self):
         arr, transf, proj, epsg = io.load_image(
-            "src/resens/tests/data/sample-bgrn-16bit-small.tif"
+            base_path.joinpath("data", "sample-bgrn-16bit-small.tif")
         )
         self.assertTupleEqual(
             arr.shape, (1511, 1441, 4), "Array has the correct dimensions"
@@ -23,7 +23,7 @@ class TestSum(unittest.TestCase):
     def test_write_image(self):
         # First load the sample image
         (arr_sample, transf_sample, proj_sample, epsg_sample) = io.load_image(
-            "src/resens/tests/data/sample-bgrn-16bit-small.tif"
+            base_path.joinpath("data", "sample-bgrn-16bit-small.tif")
         )
 
         # Then write a test output image
