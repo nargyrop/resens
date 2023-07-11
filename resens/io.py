@@ -156,6 +156,7 @@ def write_image(
     nodata: Union[int, float] = None,
     compression: bool = True,
     datatype: str = None,
+    metadata: Dict = None
 ):
     """
     Method that writes an array to a georeferenced GeoTIFF file.
@@ -170,6 +171,8 @@ def write_image(
     :param datatype: Array datatype. Set to None to have the script automatically
     detect the datatype or select
     between uint8, uint16, int8, int16, float32.
+    :param datatype: Dictionary containing metadata that should be written to the output 
+    image.
     :return:
     """
 
@@ -219,6 +222,8 @@ def write_image(
     )
     dataset.SetGeoTransform(transformation)
     dataset.SetProjection(projection)
+    if metadata is not None:
+        dataset.SetMetadata(metadata)
 
     for i in range(nband):
         if not nband == 1:

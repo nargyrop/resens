@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="resens",
-    version="0.4.3.13",
+    version="0.4.3.14",
     description="Raster Processing package for Remote Sensing and Earth Observation",
     long_description=long_description,
     long_description_content_type="text/markdown",
