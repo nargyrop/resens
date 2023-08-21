@@ -1,3 +1,4 @@
+import logging
 import tempfile
 import uuid
 from pathlib import Path
@@ -10,6 +11,8 @@ from numpy import int8, short, single, uint8, ushort
 from osgeo import gdal, ogr, gdalconst
 
 from . import io
+
+logger = logging.getLogger(__name__)
 
 
 def find_dtype(
@@ -139,7 +142,10 @@ def shapefile_masking(
     target_ds = None
 
     # Load the mask array
-    mask_arr, transf, proj, _ = io.load_image(mask_outpath.as_posix())
+    image_ds = io.load_image(mask_outpath.as_posix())
+    mask_arr = image_ds.array
+    transf = image_ds.transformation
+    proj = image_ds.projection
 
     # Dilate the mask
     if dilation:

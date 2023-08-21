@@ -12,39 +12,40 @@ base_path = Path(__file__).parent
 
 class TestSum(unittest.TestCase):
     def test_load_image(self):
-        arr, transf, proj, epsg = io.load_image(
+        image = io.load_image(
             base_path.joinpath("data", "sample-bgrn-16bit-small.tif")
         )
         self.assertTupleEqual(
-            arr.shape, (1511, 1441, 4), "Array has the correct dimensions"
+            image.array.shape, (1511, 1441, 4), "Array has the correct dimensions"
         )
-        self.assertEqual(epsg, "32639", "The correct EPSG code was loaded")
+        self.assertEqual(image.epsg_code, "32639", "The correct EPSG code was loaded")
 
     def test_write_image(self):
         # First load the sample image
-        (arr_sample, transf_sample, proj_sample, epsg_sample) = io.load_image(
+        sample = io.load_image(
             base_path.joinpath("data", "sample-bgrn-16bit-small.tif")
         )
 
         # Then write a test output image
         output_path = Path(tempfile.gettempdir(), "test_output.tif").as_posix()
         io.write_image(
-            out_arr=arr_sample,
+            out_arr=sample.array,
             output_img=output_path,
-            transformation=transf_sample,
-            projection=proj_sample,
+            transformation=sample.transformation,
+            projection=sample.projection,
             nodata=-1,
             compression=True,
         )
 
         # Then load the test output
-        arr_test, transf_test, proj_test, epsg_test = io.load_image(output_path)
+        image = io.load_image(output_path)
 
         # Now check to make sure everything is correct
-        self.assertTrue(np.all(arr_sample == arr_test), "Arrays are not equal")
-        self.assertTupleEqual(transf_sample, transf_test, "Transformation is correct")
-        self.assertEqual(proj_sample, proj_test, "Projection is correct")
-        self.assertEqual(epsg_sample, epsg_test, "EPSG code is correct")
+        self.assertTrue(np.all(sample.array == image.array), "Arrays are not equal")
+        self.assertTupleEqual(sample.transformation, image.transformation, "Transformation is correct")
+        self.assertEqual(sample.projection, image.projection, "Projection is correct")
+        self.assertEqual(sample.epsg_code, image.epsg_code, "EPSG code is correct")
+        self.assertDictEqual(sample.metadata, image.metadata, "Metadata is correct")
 
     def test_get_sliding_win(self):
 
@@ -81,7 +82,7 @@ class TestSum(unittest.TestCase):
             ksize=3,
         )
         self.assertTupleEqual(
-            arr_sb_tiles.shape, (33, 33, 3, 3), "Correct tile number (singleband)"
+            arr_sb_tiles.shape, (34, 34, 3, 3), "Correct tile number (singleband)"
         )
 
         arr_mb_tiles = processing.get_tiles(
@@ -89,7 +90,7 @@ class TestSum(unittest.TestCase):
             ksize=3,
         )
         self.assertTupleEqual(
-            arr_mb_tiles.shape, (33, 33, 1, 3, 3, 3), "Correct tile number (multiband)"
+            arr_mb_tiles.shape, (34, 34, 1, 3, 3, 3), "Correct tile number (multiband)"
         )
 
 

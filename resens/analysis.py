@@ -1,3 +1,4 @@
+import logging
 import math
 from typing import List, Tuple, Union
 
@@ -5,6 +6,8 @@ import cv2
 import numpy as np
 
 from . import processing
+
+logger = logging.getLogger(__name__)
 
 
 def swf(

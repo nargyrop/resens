@@ -1,17 +1,28 @@
+import logging
 import zipfile
+from collections import namedtuple
 from pathlib import Path
-from typing import Dict, Iterable, Tuple, Union
+from typing import Dict, Iterable, Tuple, Union, NamedTuple
 
 import numpy as np
 from osgeo import gdal, osr
 
 from . import rasteroptions, utils
 
+logger = logging.getLogger(__name__)
+
+class Image(NamedTuple):
+    array: np.ndarray = None
+    transformation: Iterable = [0, 1, 0, 0, -1]
+    projection: str = ""
+    epsg_code: int = 1
+    metadata: Dict = {}
+
 
 def load_image(
         img_path: Union[Path, str],
         bounds: Tuple = None,
-    ) -> Iterable:
+    ) -> Image:
     """
     Method to load an array from a raster file and retrieve the geo-
     transformation, projection and EPSG of the CRS.
@@ -19,7 +30,8 @@ def load_image(
     :param img_path: Path to image
     :param bounds: Tuple containing bounds to be used for clipping the image. 
     Should be formatted as ((xmin, ymax), (xmax, ymin)).
-    :return: tuple containing: Array, geo-transformation, projection, epsg code
+    :return: Named tuple containing: Array, geo-transformation, projection, epsg code, 
+    dictionary containing selected image metadata
     """
 
     kwargs = {}
@@ -33,6 +45,9 @@ def load_image(
     proj = dataset.GetProjection()
     srs = osr.SpatialReference(wkt=proj)
     epsg = srs.GetAttrValue("AUTHORITY", 1)
+
+    # Get metadata
+    metadata = dataset.GetMetadata()
 
     # If bounds have been passed, calculate the extents for clipping
     if bounds:
@@ -73,7 +88,7 @@ def load_image(
 
     dataset = None
 
-    return array, transf, proj, epsg
+    return Image(array, transf, proj, epsg, metadata)
 
 def load_from_zip(
     zipf_path: Union[Path, str],
@@ -134,15 +149,14 @@ def load_from_zip(
                 (key_in,) = [key for key in req_files if key in img]
 
                 if key_in in band_dict:
-                    print(f"WARNING: Multiple files were found for key: {key_in}!")
+                    logger.warning(f"WARNING: Multiple files were found for key: {key_in}!")
                     continue
 
                 # Load image, get metadata and store to dictionary
-                array, transf, proj, epsg = load_image(
+                band_dict[key_in] = load_image(
                     ziphandler + zipf_path.joinpath(img).as_posix(),
                     bounds
                 )
-                band_dict[key_in] = [array, transf, proj, epsg]
             except AttributeError:
                 raise AttributeError(f"Error loading {img}")
 

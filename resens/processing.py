@@ -1,9 +1,12 @@
+import logging
 from typing import List, Tuple, Union
 
 import cv2
 import numpy as np
 
 from . import utils
+
+logger = logging.getLogger(__name__)
 
 
 def resample_array(
