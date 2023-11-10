@@ -8,11 +8,13 @@ import cv2
 import geopandas as gpd
 import numpy as np
 from numpy import int8, short, single, uint8, ushort
-from osgeo import gdal, ogr, gdalconst
+from osgeo import gdal, gdalconst, ogr
 
 from . import io
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["find_dtype", "shapefile_masking"]
 
 
 def find_dtype(
@@ -62,6 +64,7 @@ def find_dtype(
 
     return arrtype, npdtype
 
+
 def shapefile_masking(
     polygon_shp: str,
     shape: Union[tuple, list],
@@ -98,8 +101,10 @@ def shapefile_masking(
         gdf.to_file(polygon_shp)
         remove_files.append(polygon_shp)
     elif not Path(polygon_shp).exists():
-        raise FileNotFoundError(f"Polygon shapefile does not exist at {polygon_shp.as_posix()}.")
-    
+        raise FileNotFoundError(
+            f"Polygon shapefile does not exist at {polygon_shp.as_posix()}."
+        )
+
     polygon_shp = Path(polygon_shp)
 
     # Make sure the shapefile and image are using the same CRS
@@ -107,7 +112,7 @@ def shapefile_masking(
     out_epsg = gdf.crs.from_wkt(projection).to_epsg()
     if gdf.crs.to_epsg() != out_epsg:
         gdf = gdf.to_crs(epsg=out_epsg)
-        
+
         # Write temporary file
         polygon_shp = Path(tempfile.NamedTemporaryFile().name)
         gdf.to_file(polygon_shp)
@@ -162,7 +167,7 @@ def shapefile_masking(
                 iterations=1,
             )
         io.write_image(mask_arr, mask_outpath.as_posix(), transf, proj)
-    
+
     for fil in remove_files:
         try:
             if fil.is_file():
@@ -173,5 +178,5 @@ def shapefile_masking(
                 fil.rmdir()
         except Exception:
             pass
-    
+
     return mask_arr

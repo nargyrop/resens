@@ -1,5 +1,2 @@
-from . import analysis
-from . import io
-from . import processing
-from . import utils
+from . import analysis, io, processing, utils
 from .__version__ import __version__

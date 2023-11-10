@@ -9,10 +9,10 @@ from . import processing
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["swf", "phase_correlation"]
 
-def swf(
-    in_arr: np.ndarray, ksize: int = None, filter_op: str = "mean"
-) -> np.ndarray:
+
+def swf(in_arr: np.ndarray, ksize: int = None, filter_op: str = "mean") -> np.ndarray:
     """
     Method to apply a pixel-by-pixel median or mean filter using the side
     window technique.
@@ -70,9 +70,7 @@ def swf(
     padded = None
 
     # Get the median value of each sub-window, then flatten them
-    up_down_meds = np.apply_over_axes(filter_op, up_down, pr_axes).astype(
-        up_down.dtype
-    )
+    up_down_meds = np.apply_over_axes(filter_op, up_down, pr_axes).astype(up_down.dtype)
     up_down = None
     left_right_meds = np.apply_over_axes(filter_op, left_right, pr_axes).astype(
         left_right.dtype
@@ -117,25 +115,24 @@ def swf(
 
     subtr = np.absolute(stacked - in_arr.reshape(reshape_shape))
     in_arr = None
-    inds = np.argmin(
-        subtr, axis=0
-    )  # Get indices where the subtr is minimum along the 0
+    inds = np.argmin(subtr, axis=0)  # Get indices where the subtr is minimum along the 0
     # axis
     subtr = None
 
     # Get the output pixel values
     if not bands:
-        filt = np.take_along_axis(
-            stacked, np.expand_dims(inds, axis=0), axis=0
-        ).reshape(sy, sx)
+        filt = np.take_along_axis(stacked, np.expand_dims(inds, axis=0), axis=0).reshape(
+            sy, sx
+        )
     else:
-        filt = np.take_along_axis(
-            stacked, np.expand_dims(inds, axis=0), axis=0
-        ).reshape(sy, sx, bands)
+        filt = np.take_along_axis(stacked, np.expand_dims(inds, axis=0), axis=0).reshape(
+            sy, sx, bands
+        )
 
     stacked = None
 
     return filt
+
 
 def kernel_disp(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
     """
@@ -180,7 +177,7 @@ def phase_correlation(
     :param ksize: Kernel size
     :param eq_histogram: Enable histogram equalization
     :param transf: Geo-transformation tuple
-    :param use_sliding_tiles: Flag to enable using sliding windows instead 
+    :param use_sliding_tiles: Flag to enable using sliding windows instead
     of tiles
     :return: Subpixel displacement map,  geo-transformation tuple
     """
@@ -197,7 +194,6 @@ def phase_correlation(
         cv2.equalizeHist(img1, img1)
         cv2.equalizeHist(img2, img2)
 
-
     # Get tiles for each band
     if use_sliding_tiles:
         img1_wins = processing.get_sliding_win(in_arr=img1, ksize=ksize)
@@ -206,10 +202,10 @@ def phase_correlation(
     else:
         img1_wins = processing.get_tiles(in_arr=img1, ksize=ksize)
         img2_wins = processing.get_tiles(in_arr=img2, ksize=ksize)
-        
+
         # Adjust geographic transformation for pixel size
         new_tr = (transf[0], transf[1] * ksize, 0, transf[3], 0, transf[5] * ksize)
-    
+
     iter_rows = min((img1_wins.shape[0], img2_wins.shape[0]))
     iter_cols = min((img1_wins.shape[1], img2_wins.shape[1]))
 
@@ -217,23 +213,20 @@ def phase_correlation(
     # flatten the tile arrays
     img1_wins = img1_wins.reshape(-1, ksize, ksize)
     img2_wins = img2_wins.reshape(-1, ksize, ksize)
-    good_locs_img1 = np.where(
-        np.any(img1_wins.reshape(-1, ksize ** 2) != 0, axis=1)
-        )[0]
-    good_locs_img2 = np.where(
-        np.any(img2_wins.reshape(-1, ksize ** 2) != 0, axis=1)
-        )[0]
+    good_locs_img1 = np.where(np.any(img1_wins.reshape(-1, ksize**2) != 0, axis=1))[0]
+    good_locs_img2 = np.where(np.any(img2_wins.reshape(-1, ksize**2) != 0, axis=1))[0]
     common_good_locs = set(good_locs_img1).intersection(set(good_locs_img2))
 
     # Get displacement map
     disp_map = np.zeros((iter_rows, iter_cols), dtype=np.float16).flatten()
     for loc in common_good_locs:
         disp_map[loc] = np.round(kernel_disp(img1_wins[loc], img2_wins[loc]), 1)
-    
+
     # Bring back to correct shape
     disp_map = disp_map.reshape((iter_rows, iter_cols))
 
     return disp_map, new_tr
+
 
 def estimate_disp(disp_map: np.ndarray) -> np.ndarray:
     """
@@ -247,19 +240,13 @@ def estimate_disp(disp_map: np.ndarray) -> np.ndarray:
         nrow, ncol, _ = disp_map.shape  # Get # of rows in correlation surface
     elif disp_map.ndim == 2:
         nrow, ncol = disp_map.shape  # Get # of rows in correlation surface
-    peak_y, peak_x = np.unravel_index(
-        np.argmax(disp_map, axis=None), disp_map.shape
-    )
+    peak_y, peak_x = np.unravel_index(np.argmax(disp_map, axis=None), disp_map.shape)
 
     # Get displacements adjacent to peak
     x_bef = (peak_x - 1 >= 0) * (peak_x - 1) + (peak_x - 1 < 0) * peak_x
-    x_aft = (peak_x + 1 >= ncol - 1) * peak_x + (peak_x + 1 < ncol - 1) * (
-        peak_x + 1
-    )
+    x_aft = (peak_x + 1 >= ncol - 1) * peak_x + (peak_x + 1 < ncol - 1) * (peak_x + 1)
     y_bef = (peak_y - 1 >= 0) * (peak_y - 1) + (peak_y - 1 < 0) * peak_y
-    y_aft = (peak_y + 1 >= nrow - 1) * peak_y + (peak_y + 1 < nrow - 1) * (
-        peak_y + 1
-    )
+    y_aft = (peak_y + 1 >= nrow - 1) * peak_y + (peak_y + 1 < nrow - 1) * (peak_y + 1)
 
     # Estimate subpixel displacement in x-direction
     dx_num = np.log(disp_map[peak_y, x_aft]) - np.log(disp_map[peak_y, x_bef])
@@ -295,5 +282,5 @@ def estimate_disp(disp_map: np.ndarray) -> np.ndarray:
     disx = peak_x + dx
     disy = peak_y + dy
     dis = np.sqrt(np.power(disx, 2) + np.power(disy, 2))
-    
+
     return dis

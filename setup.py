@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="resens",
-    version="0.4.3.15",
+    version="0.4.3.16",
     description="Raster Processing package for Remote Sensing and Earth Observation",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -17,13 +17,13 @@ setup(
     license="MIT",
     packages=["resens"],
     package_dir={"resens": "resens"},
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     zip_safe=False,
     install_requires=[
-        "numpy>=1.23.4",
         "GDAL>=3",
-        "opencv-python==4.6.0.66",
-        "geopandas==0.11.1",
-        "setuptools==65.5.1"
-    ]
+        "geopandas>=0.11.1",
+        "numpy>=1.23.4",
+        "opencv-python>=4.6.0.66",
+        "setuptools>=67.7.2",
+    ],
 )

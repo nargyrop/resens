@@ -1,6 +1,35 @@
 [flake8]
-ignore = E501, W503, E203
+format = ${cyan}%(path)s:%(row)d:%(col)d${reset}: ${red_bold}%(code)s %(text)s${reset}
 max-line-length = 90
 exclude =
-    donotuse,
-    data_recorders
+    __pycache__
+    venv
+    env
+    .venv
+    .env
+    .git
+    layout.py
+    local_settings.py
+    data
+extend-ignore =
+    # E203	Whitespace before ':'
+    # (E203 is not PEP 8 compliant and will cause inconsistencies with black formatting),
+    # see Using Black with other tools section in the black documentation for more details
+    E203
+    # Missing docstring in public module
+    D100
+    # Missing docstring in public class
+    D101
+    # Missing docstring in public method
+    D102
+    # Missing docstring in public function
+    D103
+    # Missing docstring in public package
+    D104
+    # Missing docstring in magic method
+    D105
+    # Missing docstring in __init__
+    D107
+per-file-ignores =
+    resens/__init__.py:F401
+statistics = True

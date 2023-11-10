@@ -8,13 +8,21 @@ from . import utils
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "resample_array",
+    "convert8bit",
+    "multiband2grayscale",
+    "get_sliding_win",
+    "get_tiles",
+]
+
 
 def resample_array(
     in_arr: np.ndarray,
     out_shape: Union[Tuple, List] = None,
     in_pix: Union[float, int] = None,
     out_pix: Union[float, int] = None,
-    interpolation: str = "linear"
+    interpolation: str = "linear",
 ) -> np.ndarray:
     """
     Method that resamples arrays using the shape or the pixel size.
@@ -32,7 +40,7 @@ def resample_array(
     inter_method = {
         "linear": cv2.INTER_LINEAR,
         "cubic": cv2.INTER_CUBIC,
-        "lanczos": cv2.INTER_LANCZOS4
+        "lanczos": cv2.INTER_LANCZOS4,
     }
 
     # Make sure in_arr is of a supported dtype
@@ -45,9 +53,8 @@ def resample_array(
     if out_shape:
         if not in_arr.shape == out_shape:
             resampled = cv2.resize(
-                in_arr, 
-                out_shape,
-                interpolation=inter_method[interpolation])
+                in_arr, out_shape, interpolation=inter_method[interpolation]
+            )
         else:
             resampled = in_arr
     elif in_pix and out_pix:
@@ -61,8 +68,8 @@ def resample_array(
                 None,
                 fx=scalr,
                 fy=scalr,
-                interpolation=inter_method[interpolation]
-                )
+                interpolation=inter_method[interpolation],
+            )
         else:
             # Rectangular pixels
             scalrx = in_pix[1] / out_pix[1]
@@ -72,12 +79,13 @@ def resample_array(
                 None,
                 fx=scalrx,
                 fy=scalry,
-                interpolation=inter_method[interpolation]
-                )
+                interpolation=inter_method[interpolation],
+            )
     else:
         resampled = None
 
     return resampled
+
 
 def convert8bit(nbit_image: np.ndarray) -> np.ndarray:
     """
@@ -93,9 +101,7 @@ def convert8bit(nbit_image: np.ndarray) -> np.ndarray:
         av_val = np.mean(arr)
         std_val = np.std(arr)
         min_val = av_val - 1.96 * std_val
-        min_val = (
-            min_val if min_val >= 0 else 0
-        )  # make sure min value is not negative
+        min_val = min_val if min_val >= 0 else 0  # make sure min value is not negative
         max_val = av_val + 1.96 * std_val
 
         # Truncate the array - Contrast Enhancement
@@ -123,6 +129,7 @@ def convert8bit(nbit_image: np.ndarray) -> np.ndarray:
 
     return np.round(bit8_img)
 
+
 def multiband2grayscale(img: np.ndarray) -> np.ndarray:
     """
     Function to convert point coordinates to geojson format.
@@ -145,14 +152,13 @@ def multiband2grayscale(img: np.ndarray) -> np.ndarray:
     )
     channel_weights = np.nanmean(img_weights_arr, axis=(0, 1))
     while channel_weights.sum() > 1.0:
-        channel_weights -= (
-            channel_weights * 0.01
-        )  # Make sure the weights sum to 1.0
+        channel_weights -= channel_weights * 0.01  # Make sure the weights sum to 1.0
 
     # Get grayscale image
     gray = np.sum(img * channel_weights, axis=2)
 
     return gray
+
 
 def get_sliding_win(
     in_arr: np.ndarray,
@@ -177,7 +183,6 @@ def get_sliding_win(
 
     # Get window radius, padded array and strides
     if pad:
-        ksize += 1 - ksize % 2  # Make sure window size is an odd number
         radius = ksize // 2
         pad_widths = [
             [radius, radius],  # 0-axis padding
@@ -218,21 +223,19 @@ def get_sliding_win(
             in_arr.strides[1] * step_x,
             in_arr.strides[2],
         ) + in_arr.strides
-        out_shape = (
-            y_size, x_size, 1,
-            ksize, ksize, nbands
-        )
+        out_shape = (y_size, x_size, 1, ksize, ksize, nbands)
 
     # Slice the padded array using strides
     sliced_array = as_strided(in_arr, shape=out_shape, strides=strides)
 
     return sliced_array
 
+
 def get_tiles(
     in_arr: np.ndarray,
     ksize: Union[int, List[int], Tuple[int]] = None,
     nblocks: int = None,
-    pad: bool = True
+    pad: bool = True,
 ) -> np.ndarray:
     """
     Efficient method that returns sliced arrays for sliding windows.
@@ -271,7 +274,7 @@ def get_tiles(
             ksize_y = in_arr.shape[0] // nblocks
             step_x = ksize_x
             step_y = ksize_y
-    
+
     # Get window radius, padded array and strides
     if pad:
         pad_widths = [
