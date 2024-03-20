@@ -2,7 +2,7 @@ build==1.0.3
 twine==4.0.2
 
 # linter/formatters
-black==22.3.0
+black==24.3.0
 flake8-black==0.3.2
 flake8-colors==0.1.9
 flake8-docstrings==1.6.0
