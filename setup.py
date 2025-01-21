@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="resens",
-    version="0.4.3.16",
+    version="0.4.3.18",
     description="Raster Processing package for Remote Sensing and Earth Observation",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -24,6 +24,7 @@ setup(
         "geopandas>=0.11.1",
         "numpy>=1.23.4",
         "opencv-python>=4.6.0.66",
-        "setuptools>=67.7.2",
+        "setuptools>=69.5.1",
+        "wheel>=0.43.0",
     ],
 )

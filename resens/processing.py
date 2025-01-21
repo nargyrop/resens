@@ -62,23 +62,23 @@ def resample_array(
             out_pix, (list, tuple)
         ):
             # Square pixels
-            scalr = in_pix / out_pix
+            scale = in_pix / out_pix
             resampled = cv2.resize(
                 in_arr,
                 None,
-                fx=scalr,
-                fy=scalr,
+                fx=scale,
+                fy=scale,
                 interpolation=inter_method[interpolation],
             )
         else:
             # Rectangular pixels
-            scalrx = in_pix[1] / out_pix[1]
-            scalry = in_pix[0] / out_pix[0]
+            scalex = in_pix[1] / out_pix[1]
+            scaley = in_pix[0] / out_pix[0]
             resampled = cv2.resize(
                 in_arr,
                 None,
-                fx=scalrx,
-                fy=scalry,
+                fx=scalex,
+                fy=scaley,
                 interpolation=inter_method[interpolation],
             )
     else:

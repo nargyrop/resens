@@ -1,7 +1,4 @@
-try:
-    import gdal
-except ImportError:
-    from osgeo import gdal
+from osgeo import gdal
 
 CO_COMPRESS = [
     "COMPRESS=DEFLATE",

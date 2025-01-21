@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import List, Tuple, Union
+from typing import Callable, List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 __all__ = ["swf", "phase_correlation"]
 
 
-def swf(in_arr: np.ndarray, ksize: int = None, filter_op: str = "mean") -> np.ndarray:
+def swf(
+    in_arr: np.ndarray, ksize: int = None, filter_op: Union[Callable, str] = "mean"
+) -> np.ndarray:
     """
     Method to apply a pixel-by-pixel median or mean filter using the side
     window technique.
@@ -25,8 +27,9 @@ def swf(in_arr: np.ndarray, ksize: int = None, filter_op: str = "mean") -> np.nd
     from numpy.lib.stride_tricks import as_strided
 
     # Available filter operations
-    filter_dict = {"median": np.median, "mean": np.mean}
-    filter_op = filter_dict[filter_op]
+    if isinstance(filter_op, str):
+        filter_dict = {"median": np.median, "mean": np.mean}
+        filter_op = filter_dict[filter_op]
 
     # Get window radius, padded array and strides
     ksize += 1 - ksize % 2  # Make sure window size is an odd number
