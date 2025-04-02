@@ -1,8 +1,9 @@
 import logging
 import tempfile
 import uuid
+from numbers import Number
 from pathlib import Path
-from typing import Tuple, Type, Union
+from typing import Iterable, Tuple, Type, Union
 
 import cv2
 import geopandas as gpd
@@ -67,11 +68,11 @@ def find_dtype(
 
 def shapefile_masking(
     polygon_shp: str,
-    shape: Union[tuple, list],
+    shape: Iterable[int],
     transformation: tuple,
     projection: str,
     mask_outpath: Union[Path, str] = None,
-    burn_value: Union[int, float] = 1,
+    burn_value: Number = 1,
     dilation: bool = False,
     dilation_iters: int = None,
     compression: bool = True,
@@ -143,7 +144,9 @@ def shapefile_masking(
     shp_lyr = shp_ds.GetLayer()
 
     # Rasterization
-    gdal.RasterizeLayer(target_ds, [1], shp_lyr, burn_values=[burn_value])
+    gdal.RasterizeLayer(
+        target_ds, [1], shp_lyr, burn_values=[burn_value], options=["ALL_TOUCHED=TRUE"]
+    )
     target_ds = None
 
     # Load the mask array

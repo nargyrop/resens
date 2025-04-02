@@ -1,7 +1,8 @@
 import logging
 import zipfile
+from numbers import Number
 from pathlib import Path
-from typing import Dict, Iterable, NamedTuple, Tuple, Union
+from typing import Dict, Iterable, NamedTuple, Sequence, Tuple, Union
 
 import numpy as np
 from osgeo import gdal, osr
@@ -126,7 +127,7 @@ def load_image(
 
 def load_from_zip(
     zipf_path: Union[Path, str],
-    req_files: Union[list, tuple],
+    req_files: Sequence[str],
     extension: str,
     group: str = "",
     bounds: Tuple = None,
@@ -203,9 +204,9 @@ def load_from_zip(
 def write_image(
     out_arr: np.ndarray,
     output_img: Union[Path, str],
-    transformation: Tuple,
+    transformation: Iterable[Number],
     projection: str,
-    nodata: Union[int, float] = None,
+    nodata: Number = None,
     compression: bool = True,
     datatype: str = None,
     metadata: Dict = None,

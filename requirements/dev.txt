@@ -1,5 +1,5 @@
-build==1.0.3
-twine==4.0.2
+build
+twine
 
 # linter/formatters
 black==24.3.0

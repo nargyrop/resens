@@ -1,5 +1,6 @@
 import logging
-from typing import List, Tuple, Union
+from numbers import Number
+from typing import Sequence, Union
 
 import cv2
 import numpy as np
@@ -19,9 +20,9 @@ __all__ = [
 
 def resample_array(
     in_arr: np.ndarray,
-    out_shape: Union[Tuple, List] = None,
-    in_pix: Union[float, int] = None,
-    out_pix: Union[float, int] = None,
+    out_shape: Sequence[int] = None,
+    in_pix: Number = None,
+    out_pix: Number = None,
     interpolation: str = "linear",
 ) -> np.ndarray:
     """
@@ -53,7 +54,7 @@ def resample_array(
     if out_shape:
         if not in_arr.shape == out_shape:
             resampled = cv2.resize(
-                in_arr, out_shape, interpolation=inter_method[interpolation]
+                in_arr, out_shape[::-1], interpolation=inter_method[interpolation]
             )
         else:
             resampled = in_arr
@@ -233,7 +234,7 @@ def get_sliding_win(
 
 def get_tiles(
     in_arr: np.ndarray,
-    ksize: Union[int, List[int], Tuple[int]] = None,
+    ksize: Union[int, Sequence[int]] = None,
     nblocks: int = None,
     pad: bool = True,
 ) -> np.ndarray:

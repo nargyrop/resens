@@ -1,6 +1,7 @@
 import logging
 import math
-from typing import Callable, List, Tuple, Union
+from numbers import Number
+from typing import Callable, Sequence, Tuple, Union
 
 import cv2
 import numpy as np
@@ -168,7 +169,7 @@ def phase_correlation(
     img2: np.ndarray,
     ksize: int = 3,
     eq_histogram: bool = None,
-    transf: Union[Tuple, List] = None,
+    transf: Sequence[Number] = None,
     use_sliding_tiles: bool = False,
 ) -> Tuple[np.ndarray, Tuple]:
     """
