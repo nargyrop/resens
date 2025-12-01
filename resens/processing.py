@@ -34,7 +34,8 @@ def resample_array(
     pixels, provide a tuple (psy, psx)
     :param out_pix: Output pixel size. Provide along with in_pix instead of out_shape.
     For non-square pixels, provide a tuple (psy, psx)
-    :param interpolation: Interpolation method. Choose between linear, cubic, lanczos.
+    :param interpolation: Interpolation method. Choose between nearest, linear, cubic,
+    lanczos.
     :return: Resampled array, Adjusted Geo-transformation
     """
 
@@ -42,6 +43,7 @@ def resample_array(
         "linear": cv2.INTER_LINEAR,
         "cubic": cv2.INTER_CUBIC,
         "lanczos": cv2.INTER_LANCZOS4,
+        "nearest": cv2.INTER_NEAREST,
     }
 
     # Make sure in_arr is of a supported dtype
