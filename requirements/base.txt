@@ -1,4 +1,4 @@
-fiona==1.9.6
+fiona==1.10b2
 fsspec
 GDAL==3.4.1
 geopandas>=0.11.1
