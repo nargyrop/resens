@@ -4,14 +4,15 @@ from pathlib import Path
 
 import numpy as np
 
-from resens import io, processing
+import resens as rs
+from resens import utils
 
 base_path = Path(__file__).parent
 
 
 class TestSum(unittest.TestCase):
     def test_load_image(self):
-        image = io.load_image(base_path.joinpath("data", "sample-bgrn-16bit-small.tif"))
+        image = rs.load_image(base_path.joinpath("data", "sample-bgrn-16bit-small.tif"))
         self.assertTupleEqual(
             image.array.shape, (1511, 1441, 4), "Array has the correct dimensions"
         )
@@ -19,25 +20,22 @@ class TestSum(unittest.TestCase):
 
     def test_write_image(self):
         # First load the sample image
-        sample = io.load_image(base_path.joinpath("data", "sample-bgrn-16bit-small.tif"))
+        sample = rs.load_image(base_path.joinpath("data", "sample-bgrn-16bit-small.tif"))
 
         # Then write a test output image
-        output_path = Path(tempfile.gettempdir(), "test_output.tif").as_posix()
-        io.write_image(
-            out_arr=sample.array,
-            output_img=output_path,
-            transformation=sample.transformation,
-            projection=sample.projection,
+        output_path = Path(tempfile.gettempdir(), "test_output.tif")
+        sample.write_image(
+            path=output_path,
             nodata=-1,
             compression=True,
         )
 
         # Then load the test output
-        image = io.load_image(output_path)
+        image = rs.load_image(output_path)
 
         # Now check to make sure everything is correct
         self.assertTrue(np.all(sample.array == image.array), "Arrays are not equal")
-        self.assertTupleEqual(
+        self.assertListEqual(
             sample.transformation, image.transformation, "Transformation is correct"
         )
         self.assertEqual(sample.projection, image.projection, "Projection is correct")
@@ -50,8 +48,8 @@ class TestSum(unittest.TestCase):
         arr_sb = np.random.randint(0, 256, (100, 100))
         arr_mb = np.random.randint(0, 256, (100, 100, 3))
 
-        arr_sb_convs = processing.get_sliding_win(
-            in_arr=arr_sb, ksize=3, step_x=1, step_y=1, pad=True
+        arr_sb_convs = utils.get_sliding_win(
+            array=arr_sb, ksize=3, step_x=1, step_y=1, pad=True
         )
         self.assertTupleEqual(
             arr_sb_convs.shape,
@@ -59,12 +57,12 @@ class TestSum(unittest.TestCase):
             "Correct convolution number (singleband)",
         )
 
-        arr_mb_convs = processing.get_sliding_win(
-            in_arr=arr_mb, ksize=3, step_x=1, step_y=1, pad=True
+        arr_mb_convs = utils.get_sliding_win(
+            array=arr_mb, ksize=3, step_x=1, step_y=1, pad=True
         )
         self.assertTupleEqual(
             arr_mb_convs.shape,
-            (102, 102, 1, 3, 3, 3),
+            (102, 102, 3, 3, 3),
             "Correct tile number (multiband)",
         )
 
@@ -74,20 +72,20 @@ class TestSum(unittest.TestCase):
         arr_sb = np.random.randint(0, 256, (100, 100))
         arr_mb = np.random.randint(0, 256, (100, 100, 3))
 
-        arr_sb_tiles = processing.get_tiles(
-            in_arr=arr_sb,
+        arr_sb_tiles = utils.get_tiles(
+            array=arr_sb,
             ksize=3,
         )
         self.assertTupleEqual(
             arr_sb_tiles.shape, (34, 34, 3, 3), "Correct tile number (singleband)"
         )
 
-        arr_mb_tiles = processing.get_tiles(
-            in_arr=arr_mb,
+        arr_mb_tiles = utils.get_tiles(
+            array=arr_mb,
             ksize=3,
         )
         self.assertTupleEqual(
-            arr_mb_tiles.shape, (34, 34, 1, 3, 3, 3), "Correct tile number (multiband)"
+            arr_mb_tiles.shape, (34, 34, 3, 3, 3), "Correct tile number (multiband)"
         )
 
 

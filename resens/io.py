@@ -1,25 +1,17 @@
 import logging
 import zipfile
-from numbers import Number
 from pathlib import Path
-from typing import Dict, Iterable, NamedTuple, Sequence, Tuple, Union
+from typing import Dict, Sequence, Tuple, Union
 
 import numpy as np
 from osgeo import gdal, osr
 
-from . import rasteroptions, utils
+from . import utils
+from .base import Image
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["load_image", "load_from_zip", "write_image"]
-
-
-class Image(NamedTuple):
-    array: np.ndarray = None
-    transformation: Iterable = [0, 1, 0, 0, -1]
-    projection: str = ""
-    epsg_code: int = 1
-    metadata: Dict = {}
+__all__ = ["load_image", "load_from_zip"]
 
 
 def load_image(
@@ -31,7 +23,7 @@ def load_image(
 
     :param img_path: Path to image
     :param bounds: Tuple containing bounds to be used for clipping the image.
-    Should be formatted as ((xmin, ymax), (xmax, ymin)).
+    Should be formatted as (xmin, ymin, xmax, ymax).
     :param fill_outside: When the defined bounds are outside of the array's shape, the
     function will fill the pixels outside of the array dimensions with zeroes.
     :return: Named tuple containing: Array, geo-transformation, projection, epsg code,
@@ -40,12 +32,11 @@ def load_image(
 
     load_kwargs = {}
 
-    if isinstance(img_path, Path):
-        img_path = img_path.as_posix()
+    img_path = img_path.as_posix() if isinstance(img_path, Path) else img_path
     dataset = gdal.Open(img_path)
 
     # Get geographic information
-    transf = kwargs.get("transformation", None) or dataset.GetGeoTransform()
+    transf = kwargs.get("transformation", None) or list(dataset.GetGeoTransform())
     proj = kwargs.get("projection", None) or dataset.GetProjection()
     srs = osr.SpatialReference(wkt=proj)
     epsg = srs.GetAttrValue("AUTHORITY", 1)
@@ -56,7 +47,7 @@ def load_image(
     # If bounds have been passed, calculate the extents for clipping
     if bounds:
         raster_size = dataset.RasterXSize, dataset.RasterYSize
-        (xmin, ymax), (xmax, ymin) = bounds
+        xmin, ymin, xmax, ymax = bounds
         xo, px, _, yo, _, py = transf
         xoff = int(np.ceil((xmin - xo) / px))
         yoff = int(np.ceil((ymax - yo) / py))
@@ -118,7 +109,7 @@ def load_image(
     if bounds:
         xo += (xoff - padx[0]) * psx
         yo += (yoff - pady[0]) * psy
-    transf = (xo, psx, skx, yo, sky, psy)
+    transf = [xo, psx, skx, yo, sky, psy]
 
     dataset = None
 
@@ -199,96 +190,3 @@ def load_from_zip(
                 raise AttributeError(f"Error loading {img}")
 
         return band_dict
-
-
-def write_image(
-    out_arr: np.ndarray,
-    output_img: Union[Path, str],
-    transformation: Iterable[Number],
-    projection: str,
-    nodata: Number = None,
-    compression: bool = True,
-    datatype: str = None,
-    metadata: Dict = None,
-):
-    """
-    Method that writes an array to a georeferenced GeoTIFF file.
-
-    :param out_arr: Array containing the mask.
-    :param output_img: Output image path.
-    :param transformation: Geometric Transformation (Format: (Xo, pixel size in X
-    direction, X-axis skew, Yo, Y-axis skew, pixel size in Y direction)).
-    :param projection: Projection string.
-    :param nodata: NoData value.
-    :param compression: True to enable compression (default), False to disable.
-    :param datatype: Array datatype. Set to None to have the script automatically
-    detect the datatype or select
-    between uint8, uint16, int8, int16, float32.
-    :param datatype: Dictionary containing metadata that should be written to the output
-    image.
-    :return:
-    """
-
-    # Check that the pixel sizes are of the correct sign
-    xo, psx, skx, yo, sky, psy = list(transformation)
-    if psy > 0:
-        psy *= -1
-    transformation = (xo, psx, skx, yo, sky, psy)
-
-    # Get array type
-    if datatype is None:
-        datatype, _ = utils.find_dtype(out_arr)
-
-    out_arr = out_arr.astype(datatype)
-    gdal_datatype = rasteroptions.GDAL_DTYPES[datatype]
-
-    try:
-        # Determine the shape of the array and the number of bands
-        if out_arr.shape[0] > out_arr.shape[2]:
-            row_ind = 0
-            col_ind = 1
-            nband = out_arr.shape[2]
-        else:
-            row_ind = 1
-            col_ind = 2
-            nband = out_arr.shape[0]
-
-    except IndexError:
-        row_ind = 0
-        col_ind = 1
-        nband = 1
-
-    # Construct output image path
-    if isinstance(output_img, str):
-        output_img = Path(output_img)
-    if output_img.suffix == "":
-        output_img = output_img.with_suffix(".tif")
-
-    driver = gdal.GetDriverByName("GTiff")
-    dataset = driver.Create(
-        output_img.as_posix(),
-        out_arr.shape[col_ind],
-        out_arr.shape[row_ind],
-        nband,
-        gdal_datatype,
-        options=rasteroptions.CO_COMPRESS if compression else rasteroptions.CO_NOCOMPRESS,
-    )
-    dataset.SetGeoTransform(transformation)
-    dataset.SetProjection(projection)
-    if metadata is not None:
-        dataset.SetMetadata(metadata)
-
-    for i in range(nband):
-        if not nband == 1:
-            out_band = dataset.GetRasterBand(i + 1)
-            if nodata:
-                out_band.SetNoDataValue(nodata)
-            out_band.WriteArray(out_arr[..., i])
-        else:
-            out_band = dataset.GetRasterBand(i + 1)
-            if nodata:
-                out_band.SetNoDataValue(nodata)
-            out_band.WriteArray(out_arr)
-        out_band = None
-
-    dataset = None
