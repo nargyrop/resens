@@ -1,5 +1,6 @@
 fsspec
 gdal==3.4.1
+matplotlib
 numpy<2
 setuptools
 wheel>=0.43.0
