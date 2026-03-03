@@ -12,13 +12,15 @@ __all__ = ["find_dtype", "swf", "get_sliding_win", "get_tiles"]
 def find_dtype(
     in_arr: np.ndarray,
 ) -> Tuple[str, Type[Union[int8, uint8, short, ushort, single]]]:
-    """
-    Method to retrieve an array's data type.
+    """Infer a compact dtype for an input array.
 
-    :param in_arr: Image Array
-    :return: Array type, numpy dtype
-    """
+    The inference is based on whether values are integer-like and on the observed
+    value range.
 
+    :param in_arr: Input array.
+    :return: Tuple ``(dtype_name, numpy_dtype)`` where ``dtype_name`` is one of
+             ``{"int8", "int16", "uint8", "uint16", "float32"}``.
+    """
     # Initialize a dictionary to store the numpy attribute for each dtype
     dtype_dict = {
         "int8": np.int8,
@@ -60,16 +62,12 @@ def find_dtype(
 def swf(
     in_arr: np.ndarray, ksize: int = None, filter_op: Union[Callable, str] = "mean"
 ) -> np.ndarray:
-    """
-    Method to apply a pixel-by-pixel median or mean filter using the side
-    window technique.
+    """Apply a side-window filter (mean or median) pixel-by-pixel.
 
-    :param in_arr: Input array (2D or 3D numpy array)
-    :param ksize: Window size (odd number). If even, will be adjusted to the
-                  next odd number.
-    :param filter_op: Filter operation to be used. Can be "median", "mean",
-                      or a callable function. Defaults to "mean".
-    :return: Filtered array with the same shape and dtype as input
+    :param in_arr: Input array (2D or 3D).
+    :param ksize: Window size (odd). If even, it is adjusted to the next odd number.
+    :param filter_op: Filter operation: ``"median"``, ``"mean"``, or a callable.
+    :return: Filtered array with the same shape and dtype as input.
     """
     from numpy.lib.stride_tricks import as_strided
 
@@ -119,7 +117,7 @@ def swf(
     rest = as_strided(padded, shape=others_shape, strides=strides)
     padded = None
 
-    # Get the median value of each sub-window, then flatten them
+    # Get the median/mean value of each sub-window, then flatten them
     up_down_meds = np.apply_over_axes(filter_op, up_down, pr_axes).astype(up_down.dtype)
     up_down = None
     left_right_meds = np.apply_over_axes(filter_op, left_right, pr_axes).astype(
@@ -139,7 +137,7 @@ def swf(
     ne_meds = rest_meds[:-radius, radius:].reshape(reshape_shape)
     se_meds = rest_meds[radius:, radius:].reshape(reshape_shape)
 
-    # Stack the flattened arrays and find where the minimum value is for each pixel
+    # Stack and find closest sub-window value per pixel
     stacked = np.vstack(
         (
             up_meds,
@@ -153,7 +151,6 @@ def swf(
         )
     )
 
-    # remove from memory
     up_meds = None
     down_meds = None
     right_meds = None
@@ -165,11 +162,9 @@ def swf(
 
     subtr = np.absolute(stacked - in_arr.reshape(reshape_shape))
     in_arr = None
-    inds = np.argmin(subtr, axis=0)  # Get indices where the subtr is minimum along the 0
-    # axis
+    inds = np.argmin(subtr, axis=0)
     subtr = None
 
-    # Get the output pixel values
     if not bands:
         filt = np.take_along_axis(stacked, np.expand_dims(inds, axis=0), axis=0).reshape(
             sy, sx
@@ -180,7 +175,6 @@ def swf(
         )
 
     stacked = None
-
     return filt
 
 
@@ -191,29 +185,26 @@ def get_sliding_win(
     step_y: int = 1,
     pad: bool = True,
 ) -> np.ndarray:
-    """
-    Efficient method that returns sliced arrays for sliding windows.
+    """Return a strided view of sliding windows over an array.
 
-    :param array: Image array
-    :param ksize: Odd integer window size
-    :param step_x: Step or stride size in the x-direction (def=1)
-    :param step_y: Step or stride size in the y-direction (def=1)
-    :param pad: Flag to enable image padding equal to the radius of ksize
-    :return: 4D array matching the input array's size. Each element is an array
-    matching the window size+bands
+    :param array: Input array (2D or 3D).
+    :param ksize: Window size.
+    :param step_x: Stride in x-direction.
+    :param step_y: Stride in y-direction.
+    :param pad: If ``True``, reflect-pad by ``ksize//2`` before extracting windows.
+    :return: A strided array view containing windows.
     """
-
     from numpy.lib.stride_tricks import as_strided
 
     # Get window radius, padded array and strides
     if pad:
         radius = ksize // 2
         pad_widths = [
-            [radius, radius],  # 0-axis padding
-            [radius, radius],  # 1-axis padding
+            [radius, radius],
+            [radius, radius],
         ]
         if array.ndim == 3:
-            pad_widths += [[0, 0]]  # 2-axis padding (no padding)
+            pad_widths += [[0, 0]]
         array = np.pad(array, pad_widths, "reflect")
     else:
         radius = 0
@@ -226,7 +217,6 @@ def get_sliding_win(
     else:
         raise ValueError(f"Incorrect array shape {array.shape}")
 
-    # Calculate output shape
     y_size = int(np.floor((sy + 2 * radius - ksize) / step_y) + 1)
     x_size = int(np.floor((sx + 2 * radius - ksize) / step_x) + 1)
 
@@ -235,12 +225,7 @@ def get_sliding_win(
             array.strides[0] * step_y,
             array.strides[1] * step_x,
         ) + array.strides
-        out_shape = (
-            y_size,
-            x_size,
-            ksize,
-            ksize,
-        )
+        out_shape = (y_size, x_size, ksize, ksize)
     else:
         strides = (
             array.strides[0] * step_y,
@@ -249,9 +234,7 @@ def get_sliding_win(
         ) + array.strides
         out_shape = (y_size, x_size, 1, ksize, ksize, nbands)
 
-    # Slice the padded array using strides
     sliced_array = np.squeeze(as_strided(array, shape=out_shape, strides=strides))
-
     return sliced_array
 
 
@@ -261,19 +244,16 @@ def get_tiles(
     nblocks: int = None,
     pad: bool = True,
 ) -> np.ndarray:
-    """
-    Efficient method that returns sliced arrays for sliding windows.
+    """Split an array into non-overlapping tiles using a strided view.
 
-    :param array: Image array
-    :param ksize: Integer window size or List/Tuple of window sizes in x and y
-    directions
-    :param nblocks: Integer number of tiles in which to divide the array or
-    List/Tuple of number ot tiles in x and y directions
-    :param pad: Flag to enable image padding equal to the radius of ksize
-    :return: 4D array matching the input array's size. Each element is an array
-    matching the window size+bands
-    """
+    Provide either ``ksize`` (tile size) or ``nblocks`` (number of blocks).
 
+    :param array: Input array (2D or 3D).
+    :param ksize: Tile size as an int or as ``(ksize_x, ksize_y)``.
+    :param nblocks: Number of tiles as an int or as ``(nblocks_x, nblocks_y)``.
+    :param pad: If ``True``, reflect-pad to make the array divisible by tile size.
+    :return: A strided array view containing tiles.
+    """
     from numpy.lib.stride_tricks import as_strided
 
     if ksize:

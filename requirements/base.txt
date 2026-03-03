@@ -1,8 +1,15 @@
-fiona==1.9.6
 fsspec
-GDAL==3.4.1
-geopandas>=0.11.1
+gdal==3.4.1
 numpy<2
-opencv-python>=4.6.0.66
 setuptools
 wheel>=0.43.0
+
+fiona<=1.9.6; python_version < "3.9"
+fiona==1.10.1; python_version >= "3.9"
+
+geopandas>=0.10,<0.14; python_version < "3.9"
+geopandas>0.14.3,<1.1; python_version >= "3.9" and python_version < "3.10"
+geopandas>=1.1.2; python_version >= "3.10"
+
+opencv-python>=4.6.0.66
+opencv-python>=4.11.0.86; python_version >= "3.13"
