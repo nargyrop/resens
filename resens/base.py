@@ -62,7 +62,7 @@ class Image(_Image):
         )
 
         # optional: transform extents bbox to another CRS using an EPSG code
-        if dst_epsg and dst_epsg != self.epsg_code:
+        if dst_epsg is not None and dst_epsg != self.epsg_code:
             transformer = Transformer.from_crs(
                 f"EPSG:{self.epsg_code}",
                 f"EPSG:{dst_epsg}",
@@ -76,7 +76,7 @@ class Image(_Image):
 
         return bbox
 
-    def resample_array(
+    def resample(
         self,
         out_shape: Optional[Sequence[int]] = None,
         out_pix: Optional[Number] = None,
@@ -112,7 +112,7 @@ class Image(_Image):
             resampled.array = resampled.array.astype(utils.find_dtype(resampled.array)[1])
 
         # Resize array
-        if out_shape:
+        if out_shape is not None:
             if not resampled.array.shape == out_shape:
                 scalex = float(out_shape[1]) / resampled.array.shape[1]
                 scaley = float(out_shape[0]) / resampled.array.shape[0]
@@ -123,7 +123,7 @@ class Image(_Image):
                 )
                 resampled.transformation[1] /= scalex
                 resampled.transformation[-1] /= scaley
-        elif out_pix:
+        elif out_pix is not None:
             _, psx, _, _, _, psy = resampled.transformation
             if not isinstance(out_pix, (list, tuple)):
                 # Square pixels
