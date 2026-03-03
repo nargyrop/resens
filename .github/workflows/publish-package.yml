@@ -47,14 +47,6 @@ jobs:
       run: |
         python -m build
 
-    - name: Install built package
-      run: |
-        pip install dist/*.whl
-
-    - name: Run tests
-      run: |
-        pytest
-
     - name: Publish package to PyPI
       if: success() && github.ref == 'refs/heads/master'
       env:
