@@ -29,19 +29,20 @@ def shapefile_masking(
     dilation_iters: int = None,
     compression: bool = True,
 ) -> Image:
-    """
-    Rasterize a polygons shapefile and create a raster mask.
+    """Rasterize polygons from a GeoDataFrame into a raster mask.
 
-    :param gdf: Absolute path to land polygon shapefile
-    :param shape: Input array's size including channels (e.g. (640, 480, 3))
-    :param transformation: Geographic transformation tuple
-    :param projection: CRS Projection
-    :param mask_outpath: Absolute path (including filename) to output raster mask
-    :param burn_value: Value to burn to output raster
-    :param dilation: Flag to enable dilating the land mask
-    :param dilation_iters: Number of dilation iterations
-    :param compression: True to enable compression (default), False to disable.
-    :return: Binary mask array
+    :param gdf: Polygons as a :class:`geopandas.GeoDataFrame`.
+    :param shape: Output array shape, e.g. ``(rows, cols)`` or ``(rows, cols, bands)``.
+    :param transformation: GDAL geo-transform tuple/list.
+    :param projection: CRS WKT string.
+    :param mask_outpath: Optional path for the output mask GeoTIFF. If not provided, a
+                         temporary file is used.
+    :param burn_value: Value to burn into polygons.
+    :param dilation: If ``True``, dilate the mask after rasterization.
+    :param dilation_iters: Number of dilation iterations (defaults to 1 if
+        ``dilation=True``).
+    :param compression: If ``True``, enable GeoTIFF compression.
+    :return: Mask as an :class:`~resens.base.Image`.
     """
     # Set up the output filename in a way that it won't be needed to create a
     # mask for arrays with the same extents
