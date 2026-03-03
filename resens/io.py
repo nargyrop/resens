@@ -15,21 +15,20 @@ __all__ = ["load_image", "load_from_zip"]
 
 
 def load_image(
-    img_path: Union[Path, str], bounds: Tuple = None, fill_outside: bool = False, **kwargs
+    img_path: Union[Path, str], bbox: Tuple = None, fill_outside: bool = False, **kwargs
 ) -> Image:
-    """
-    Method to load an array from a raster file and retrieve the geo-
-    transformation, projection and EPSG of the CRS.
+    """Load a raster file into an :class:`~resens.base.Image`.
+
+    The function reads the array, geo-transform, projection and metadata using GDAL.
 
     :param img_path: Path to image
-    :param bounds: Tuple containing bounds to be used for clipping the image.
-    Should be formatted as (xmin, ymin, xmax, ymax).
-    :param fill_outside: When the defined bounds are outside of the array's shape, the
-    function will fill the pixels outside of the array dimensions with zeroes.
-    :return: Named tuple containing: Array, geo-transformation, projection, epsg code,
-    dictionary containing selected image metadata
+    :param bbox: Tuple containing bounding box coordinatee to be used for clipping the
+        image. Should be formatted as (xmin, ymin, xmax, ymax).
+    :param fill_outside: If ``True``, pixels outside raster coverage (when ``bbox`` exceed
+        the raster extent) are padded with zeros.
+    :param kwargs: Optional overrides for ``transformation`` and ``projection``.
+    :return: Loaded :class:`~resens.base.Image`.
     """
-
     load_kwargs = {}
 
     img_path = img_path.as_posix() if isinstance(img_path, Path) else img_path
@@ -45,9 +44,9 @@ def load_image(
     metadata = dataset.GetMetadata()
 
     # If bounds have been passed, calculate the extents for clipping
-    if bounds:
+    if bbox:
         raster_size = dataset.RasterXSize, dataset.RasterYSize
-        xmin, ymin, xmax, ymax = bounds
+        xmin, ymin, xmax, ymax = bbox
         xo, px, _, yo, _, py = transf
         xoff = int(np.ceil((xmin - xo) / px))
         yoff = int(np.ceil((ymax - yo) / py))
@@ -95,7 +94,7 @@ def load_image(
     array = array.astype(utils.find_dtype(array)[1])
 
     # Pad the array if the selected bounds are outside of its dimensions
-    if bounds and fill_outside:
+    if bbox and fill_outside:
         pad_widths = [pady, padx]
 
         if array.ndim == 3:
@@ -106,7 +105,7 @@ def load_image(
     xo, psx, skx, yo, sky, psy = list(transf)
     if psy > 0:
         psy = -psy
-    if bounds:
+    if bbox:
         xo += (xoff - padx[0]) * psx
         yo += (yoff - pady[0]) * psy
     transf = [xo, psx, skx, yo, sky, psy]
@@ -124,21 +123,22 @@ def load_from_zip(
     bounds: Tuple = None,
     fill_outside: bool = False,
 ) -> Union[Dict, None]:
-    """
-    Method that loads all the required bands in arrays and saves them to a
-    dictionary.
+    """Load rasters from within a ZIP archive.
+
+    Files are selected by:
+    - matching the provided file ``extension``,
+    - containing any of the strings in ``req_files``,
+    - and containing ``group`` (if provided).
 
     :param zipf_path: Path to zip file
     :param req_files: List of strings included in the file names (e.g. band numbers)
     :param extension: Extension of the target image
     :param group: Extra string to search for.
     :param bounds: Tuple containing bounds to be used for clipping the image.
-    Should be formatted as ((xmin, xmax), (xmax, ymin)).
-    :param fill_outside: When the defined bounds are outside of the array's shape, the
-    function will fill the pixels outside of the array dimensions with zeroes.
-    :return: Dictionary containing the array, geo-transformation tuple, projection
-    and EPSG code of each image.
-    List containing the dictionary keys
+        Should be formatted as ((xmin, xmax), (xmax, ymin)).
+    :param fill_outside: If ``True``, pad outside coverage with zeros when cropping.
+    :return: A dictionary mapping each matched key from ``req_files`` to an
+        :class:`~resens.base.Image`. Returns ``None`` if the ZIP cannot be read.
     """
 
     # Check if req_files is actually a list
@@ -183,7 +183,7 @@ def load_from_zip(
                 # Load image, get metadata and store to dictionary
                 band_dict[key_in] = load_image(
                     img_path=ziphandler + zipf_path.joinpath(img).as_posix(),
-                    bounds=bounds,
+                    bbox=bounds,
                     fill_outside=fill_outside,
                 )
             except AttributeError:
