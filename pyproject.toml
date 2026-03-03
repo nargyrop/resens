@@ -17,7 +17,3 @@ line_length = 90
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test.py", "test_*.py", "*_test.py"]
