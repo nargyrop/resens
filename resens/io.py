@@ -36,9 +36,27 @@ def load_image(
 
     # Get geographic information
     transf = kwargs.get("transformation", None) or list(dataset.GetGeoTransform())
-    proj = kwargs.get("projection", None) or dataset.GetProjection()
+    proj = (
+        kwargs.get("projection", None)
+        or dataset.GetProjection()
+        or dataset.GetGCPProjection()
+    )
+
     srs = osr.SpatialReference(wkt=proj)
-    epsg = srs.GetAttrValue("AUTHORITY", 1)
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(proj)
+    srs.AutoIdentifyEPSG()
+    epsg = (
+        srs.GetAuthorityCode(None)
+        or srs.GetAuthorityCode("PROJCS")
+        or srs.GetAuthorityCode("GEOGCS")
+    )
+
+    # in case the raster is geoereferenced with GCPs, warp it to create a raster with
+    # geotransformation
+    if transf == [0, 1, 0, 0, 0, 1] and len(dataset.GetGCPs()):
+        dataset = gdal.Warp("/vsimem/warp.tif", dataset, dstSRS=f"EPSG:{epsg}")
+        transf = list(dataset.GetGeoTransform())
 
     # Get metadata
     metadata = dataset.GetMetadata()
@@ -117,33 +135,33 @@ def load_image(
 
 def load_from_zip(
     zipf_path: Union[Path, str],
-    req_files: Sequence[str],
+    patterns: Union[str, Sequence[str]],
     extension: str,
     group: str = "",
     bounds: Tuple = None,
     fill_outside: bool = False,
-) -> Union[Dict, None]:
+) -> Union[Dict[str, Image], None]:
     """Load rasters from within a ZIP archive.
 
     Files are selected by:
     - matching the provided file ``extension``,
-    - containing any of the strings in ``req_files``,
+    - containing any of the strings in ``patterns``,
     - and containing ``group`` (if provided).
 
     :param zipf_path: Path to zip file
-    :param req_files: List of strings included in the file names (e.g. band numbers)
+    :param patterns: List of strings included in the file names (e.g. band numbers)
     :param extension: Extension of the target image
     :param group: Extra string to search for.
     :param bounds: Tuple containing bounds to be used for clipping the image.
         Should be formatted as ((xmin, xmax), (xmax, ymin)).
     :param fill_outside: If ``True``, pad outside coverage with zeros when cropping.
-    :return: A dictionary mapping each matched key from ``req_files`` to an
+    :return: A dictionary mapping each matched key from ``patterns`` to an
         :class:`~resens.base.Image`. Returns ``None`` if the ZIP cannot be read.
     """
 
-    # Check if req_files is actually a list
-    if not isinstance(req_files, (list, tuple)):
-        req_files = [req_files]
+    # ensure ``patterns`` is a list
+    if not isinstance(patterns, (list, tuple)):
+        patterns = [patterns]
 
     # Check if the zip file path is correct
     if isinstance(zipf_path, str):
@@ -164,7 +182,7 @@ def load_from_zip(
         img_ls = [
             f
             for f in archive.namelist()
-            if f.endswith(extension) and any(x in f for x in req_files) and group in f
+            if f.endswith(extension) and any(x in f for x in patterns) and group in f
         ]
 
         # Create dictionaries to store the data
@@ -174,7 +192,7 @@ def load_from_zip(
             try:
                 # Find which of the req files fits the current, create the dict key
                 # and store it in the keys' list
-                (key_in,) = [key for key in req_files if key in img]
+                (key_in,) = [key for key in patterns if key in img]
 
                 if key_in in band_dict:
                     logger.warning(f"Multiple files were found for key: {key_in}!")
