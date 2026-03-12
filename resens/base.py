@@ -144,7 +144,7 @@ class Image(_Image):
             resampled.transformation[1] /= scalex
             resampled.transformation[-1] /= scaley
 
-        return resampled if not inplace else None
+        return resampled if inplace is False else None
 
     def reproject(self, target_epsg: int, inplace: bool = False) -> Optional["Image"]:
         """Reproject the image to a target CRS.
@@ -155,35 +155,12 @@ class Image(_Image):
                         If ``False``, return a reprojected copy.
         :return: A new :class:`~resens.base.Image` or ``None`` if ``inplace=True``.
         """
-        # Create in-memory dataset for source
-        mem_driver = gdal.GetDriverByName("MEM")
-        datatype, _ = utils.find_dtype(self.array)
-        gdal_datatype = rasteroptions.GDAL_DTYPES[datatype]
-
-        # Determine array dimensions
-        if self.array.ndim == 3:
-            nrows, ncols, nbands = self.array.shape
-        else:
-            nrows, ncols = self.array.shape
-            nbands = 1
-
-        # Create source dataset in memory
-        src_ds = mem_driver.Create("", ncols, nrows, nbands, gdal_datatype)
-        src_ds.SetGeoTransform(self.transformation)
-        src_ds.SetProjection(self.projection)
-
-        # Write array to source dataset
-        if nbands == 1:
-            src_ds.GetRasterBand(1).WriteArray(self.array)
-        else:
-            for i in range(nbands):
-                src_ds.GetRasterBand(i + 1).WriteArray(self.array[:, :, i])
-
-        # Flush to ensure data is written
-        src_ds.FlushCache()
+        src_ds = self.write_image("MEM")
 
         # Warp to in-memory output
-        reproj_ds = gdal.Warp("", src_ds, format="MEM", dstSRS=f"EPSG:{target_epsg}")
+        reproj_ds: gdal.Dataset = gdal.Warp(
+            "", src_ds, format="MEM", dstSRS=f"EPSG:{target_epsg}"
+        )
 
         if reproj_ds is None:
             raise RuntimeError(f"Failed to reproject image to EPSG:{target_epsg}")
@@ -206,12 +183,12 @@ class Image(_Image):
         src_ds = None
         reproj_ds = None
 
-        return reproj if not inplace else None
+        return reproj if inplace is False else None
 
     def to_8bit(self, inplace: bool = False) -> Optional["Image"]:
         """Convert the image to 8-bit with simple contrast enhancement.
 
-        The conversion uses histogram truncation based on mean ± 1.96 * std.
+        The conversion uses histogram truncation based on 2nd-98th percentiles.
 
         :param inplace: If ``True``, modify the current object and return ``None``.
                         If ``False``, return a converted copy.
@@ -220,15 +197,12 @@ class Image(_Image):
 
         def _make_8bit(arr: np.ndarray) -> np.ndarray:
             # Get image statistics
-            av_val = np.mean(arr)
-            std_val = np.std(arr)
-            min_val = av_val - 1.96 * std_val
+            min_val = np.nanpercentile(arr, 2)
             min_val = min_val if min_val >= 0 else 0
-            max_val = av_val + 1.96 * std_val
+            max_val = np.nanpercentile(arr, 98)
 
             # Truncate the array - Contrast Enhancement
-            arr[arr > max_val] = max_val
-            arr[arr < min_val] = min_val
+            arr = np.clip(arr, min_val, max_val)
 
             # Convert to 8bits
             arr = np.divide(arr - min_val, max_val - min_val) * 255
@@ -273,29 +247,33 @@ class Image(_Image):
             channel_weights -= channel_weights * 0.01  # Make sure the weights sum to 1.0
 
         # Get grayscale image
-        grayscale.array = np.sum(self.array * channel_weights, axis=2)
+        grayscale.array = np.nansum(self.array * channel_weights, axis=2)
 
         return grayscale if not inplace else None
 
     def write_image(
         self,
-        path: Union[Path, str],
+        path: Union[Path, str, Literal["MEM"]],
         nodata: Number = None,
         compression: bool = True,
         datatype: str = None,
         metadata: Dict = None,
-    ):
+    ) -> Union[gdal.Dataset, None]:
         """Write the image to a GeoTIFF on disk.
 
-        :param path: Output path. If no suffix is provided, ``.tif`` is appended.
+        :param path: Output path. If no suffix is provided, ``.tif`` is appended. Set to
+            ``"MEM"`` to write the raster to memory.
         :param nodata: NoData value to set on the output band(s), if provided.
-        :param compression: If ``True``, enable DEFLATE compression.
+        :param compression: If ``True``, enable DEFLATE compression. Not valid if
+            ``path="MEM"``.
         :param datatype: Output array datatype. If ``None``, the datatype is inferred.
             Supported: ``uint8``, ``uint16``, ``int8``, ``int16``, ``float32``.
         :param metadata: Extra metadata to write to the output dataset. If provided, it
             is merged with existing ``self.metadata``.
-        :return: ``None``.
+        :return: gdal.Dataset if ``path="MEM"``, otherwise ``None``.
         """
+        if nodata is None:
+            nodata = self.metadata.get("nodata")
 
         # Check that the pixel sizes are of the correct sign
         if self.transformation[-1] > 0:
@@ -325,19 +303,24 @@ class Image(_Image):
             nband = 1
 
         # Construct output image path
-        if isinstance(path, str):
-            path = Path(path)
-        if path.suffix == "":
-            path = path.with_suffix(".tif")
+        if not path == "MEM":
+            if isinstance(path, str):
+                path = Path(path)
+            if path.suffix == "":
+                path = path.with_suffix(".tif")
 
-        driver = gdal.GetDriverByName("GTiff")
-        dataset = driver.Create(
-            path.as_posix(),
+            driver: gdal.Driver = gdal.GetDriverByName("GTiff")
+        else:
+            driver: gdal.Driver = gdal.GetDriverByName("MEM")
+        dataset: gdal.Dataset = driver.Create(
+            path.as_posix() if not path == "MEM" else "",
             self.array.shape[col_ind],
             self.array.shape[row_ind],
             nband,
             gdal_datatype,
-            options=rasteroptions.CO_COMPRESS
+            options=[]
+            if path == "MEM"
+            else rasteroptions.CO_COMPRESS
             if compression
             else rasteroptions.CO_NOCOMPRESS,
         )
@@ -348,18 +331,22 @@ class Image(_Image):
 
         for i in range(nband):
             if not nband == 1:
-                out_band = dataset.GetRasterBand(i + 1)
+                out_band: gdal.Band = dataset.GetRasterBand(i + 1)
                 if nodata:
                     out_band.SetNoDataValue(nodata)
                 out_band.WriteArray(self.array[..., i])
             else:
-                out_band = dataset.GetRasterBand(i + 1)
+                out_band: gdal.Band = dataset.GetRasterBand(i + 1)
                 if nodata:
                     out_band.SetNoDataValue(nodata)
                 out_band.WriteArray(self.array)
             out_band = None
 
-        dataset = None
+        dataset.FlushCache()
+        if path == "MEM":
+            return dataset
+        else:
+            dataset = None
 
     def imshow(
         self, image_extents: Optional[List] = None, bbox: Optional[List] = None, **kwargs
