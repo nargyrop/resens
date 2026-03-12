@@ -1,6 +1,4 @@
-build
-pytest
-twine
+test
 
 # linter/formatters
 black==26.3.1
