@@ -15,7 +15,11 @@ __all__ = ["load_image", "load_from_zip"]
 
 
 def load_image(
-    img_path: Union[Path, str], bbox: Tuple = None, fill_outside: bool = False, **kwargs
+    img_path: Union[Path, str],
+    bbox: Tuple = None,
+    fill_outside: bool = False,
+    masked: bool = False,
+    **kwargs,
 ) -> Image:
     """Load a raster file into an :class:`~resens.base.Image`.
 
@@ -26,13 +30,16 @@ def load_image(
         image. Should be formatted as (xmin, ymin, xmax, ymax).
     :param fill_outside: If ``True``, pixels outside raster coverage (when ``bbox`` exceed
         the raster extent) are padded with zeros.
+    :param masked: If ``True`` and the raster has an assigned nodata value, pixels with
+        this value will be converted to `nan`. Masking the array will convert it to
+        float32, increasing the memory consumption.
     :param kwargs: Optional overrides for ``transformation`` and ``projection``.
     :return: Loaded :class:`~resens.base.Image`.
     """
     load_kwargs = {}
 
     img_path = img_path.as_posix() if isinstance(img_path, Path) else img_path
-    dataset = gdal.Open(img_path)
+    dataset: gdal.Dataset = gdal.Open(img_path)
 
     # Get geographic information
     transf = kwargs.get("transformation", None) or list(dataset.GetGeoTransform())
@@ -60,6 +67,8 @@ def load_image(
 
     # Get metadata
     metadata = dataset.GetMetadata()
+    nodata_val = dataset.GetRasterBand(1).GetNoDataValue()
+    metadata["nodata"] = nodata_val
 
     # If bounds have been passed, calculate the extents for clipping
     if bbox:
@@ -106,10 +115,15 @@ def load_image(
         load_kwargs["ysize"] = ysize
 
     # Read array
-    array = dataset.ReadAsArray(**load_kwargs)
+    array: np.ndarray = dataset.ReadAsArray(**load_kwargs)
     if array.ndim == 3:
         array = np.einsum("ijk->jki", array)
-    array = array.astype(utils.find_dtype(array)[1])
+
+    if nodata_val is not None and masked is True:
+        array = array.astype(np.float32)
+        array[array == nodata_val] = np.nan
+    else:
+        array = array.astype(utils.find_dtype(array)[1])
 
     # Pad the array if the selected bounds are outside of its dimensions
     if bbox and fill_outside:
@@ -140,6 +154,7 @@ def load_from_zip(
     group: str = "",
     bounds: Tuple = None,
     fill_outside: bool = False,
+    masked: bool = False,
 ) -> Union[Dict[str, Image], None]:
     """Load rasters from within a ZIP archive.
 
@@ -155,6 +170,9 @@ def load_from_zip(
     :param bounds: Tuple containing bounds to be used for clipping the image.
         Should be formatted as ((xmin, xmax), (xmax, ymin)).
     :param fill_outside: If ``True``, pad outside coverage with zeros when cropping.
+    :param masked: If ``True`` and the raster has an assigned nodata value, pixels with
+        this value will be converted to `nan`. Masking the array will convert it to
+        float32, increasing the memory consumption.
     :return: A dictionary mapping each matched key from ``patterns`` to an
         :class:`~resens.base.Image`. Returns ``None`` if the ZIP cannot be read.
     """
@@ -203,6 +221,7 @@ def load_from_zip(
                     img_path=ziphandler + zipf_path.joinpath(img).as_posix(),
                     bbox=bounds,
                     fill_outside=fill_outside,
+                    masked=masked,
                 )
             except AttributeError:
                 raise AttributeError(f"Error loading {img}")

@@ -26,7 +26,6 @@ class TestSum(unittest.TestCase):
         output_path = Path(tempfile.gettempdir(), "test_output.tif")
         sample.write_image(
             path=output_path,
-            nodata=-1,
             compression=True,
         )
 
