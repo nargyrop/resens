@@ -68,7 +68,6 @@ def load_image(
     # Get metadata
     metadata = dataset.GetMetadata()
     nodata_val = dataset.GetRasterBand(1).GetNoDataValue()
-    metadata["nodata"] = nodata_val
 
     # If bounds have been passed, calculate the extents for clipping
     if bbox:
@@ -122,8 +121,10 @@ def load_image(
     if nodata_val is not None and masked is True:
         array = array.astype(np.float32)
         array[array == nodata_val] = np.nan
+        dtype_s = "float32"
     else:
-        array = array.astype(utils.find_dtype(array)[1])
+        dtype_s, dtype_np = utils.find_dtype(array)
+        array = array.astype(dtype_np)
 
     # Pad the array if the selected bounds are outside of its dimensions
     if bbox and fill_outside:
@@ -144,7 +145,7 @@ def load_image(
 
     dataset = None
 
-    return Image(array, transf, proj, epsg, metadata)
+    return Image(array, transf, proj, epsg, metadata, nodata_val, dtype_s)
 
 
 def load_from_zip(
