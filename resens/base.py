@@ -4,7 +4,6 @@ from numbers import Number
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Sequence, Tuple, Union
 
-import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.image import AxesImage
@@ -25,6 +24,8 @@ class _Image:
     projection: str = ""
     epsg_code: int = 1
     metadata: Dict = field(default_factory=dict)
+    nodata: Number = None
+    dtype: str = None
 
 
 class Image(_Image):
@@ -80,7 +81,22 @@ class Image(_Image):
         self,
         out_shape: Optional[Sequence[int]] = None,
         out_pix: Optional[Number] = None,
-        interpolation: Literal["nearest", "linear", "cubic", "lanczos"] = "linear",
+        interpolation: Literal[
+            "near",
+            "bilinear",
+            "cubic",
+            "cubicspline",
+            "lanczos",
+            "average",
+            "rms",
+            "mode",
+            "max",
+            "min",
+            "med",
+            "q1",
+            "q3",
+            "sum",
+        ] = "bilinear",
         inplace: bool = False,
     ) -> Optional["Image"]:
         """Resample the image array by output shape or output pixel size.
@@ -90,59 +106,64 @@ class Image(_Image):
         :param out_shape: Output array shape as ``(nrows, ncols)``.
         :param out_pix: Output pixel size. For square pixels pass a single number.
                         For rectangular pixels pass ``(psx, psy)``.
-        :param interpolation: Interpolation method: ``nearest``, ``linear``, ``cubic``,
-                              or ``lanczos``.
+        :param interpolation: Interpolation method: ``near``, ``bilinear``, ``cubic``,
+                              ``cubicspline``, ``lanczos``, ``average``, ``rms``,
+                              ``mode``, ``max``, ``min``, ``med``, ``q1``, ``q3``,
+                              ``sum``
         :param inplace: If ``True``, modify the current object and return ``None``.
                         If ``False``, return a resampled copy.
         :return: A new :class:`~resens.base.Image` or ``None`` if ``inplace=True``.
         """
-        inter_method = {
-            "linear": cv2.INTER_LINEAR,
-            "cubic": cv2.INTER_CUBIC,
-            "lanczos": cv2.INTER_LANCZOS4,
-            "nearest": cv2.INTER_NEAREST,
-        }
+        src_ds = self.write_image("MEM")
 
-        resampled = self.copy() if inplace else self
-
-        # Make sure in_arr is of a supported dtype
-        try:
-            assert utils.find_dtype(resampled.array) in ("uint8", "uint16", "float32")
-        except AssertionError:
-            resampled.array = resampled.array.astype(utils.find_dtype(resampled.array)[1])
-
-        # Resize array
+        # Warp to in-memory output
         if out_shape is not None:
-            if not resampled.array.shape == out_shape:
-                scalex = float(out_shape[1]) / resampled.array.shape[1]
-                scaley = float(out_shape[0]) / resampled.array.shape[0]
-                resampled.array = cv2.resize(
-                    resampled.array,
-                    out_shape[::-1],
-                    interpolation=inter_method[interpolation],
-                )
-                resampled.transformation[1] /= scalex
-                resampled.transformation[-1] /= scaley
-        elif out_pix is not None:
-            _, psx, _, _, _, psy = resampled.transformation
-            if not isinstance(out_pix, (list, tuple)):
-                # Square pixels
-                scalex = psx / out_pix
-                scaley = abs(psy) / out_pix
-            else:
-                # Rectangular pixels
-                scalex = psx / out_pix[0]
-                scaley = abs(psy) / out_pix[1]
-
-            resampled.array = cv2.resize(
-                resampled.array,
-                None,
-                fx=scalex,
-                fy=scaley,
-                interpolation=inter_method[interpolation],
+            resampled_ds: gdal.Dataset = gdal.Warp(
+                "",
+                src_ds,
+                format="MEM",
+                dstSRS=f"EPSG:{self.epsg_code}",
+                width=out_shape[1],
+                height=out_shape[0],
+                resampleAlg=interpolation,
             )
-            resampled.transformation[1] /= scalex
-            resampled.transformation[-1] /= scaley
+        elif out_pix is not None:
+            if not isinstance(out_pix, list):
+                out_pix = [out_pix, out_pix]
+            else:
+                if not len(out_pix) == 2:
+                    out_pix *= 2
+
+            resampled_ds: gdal.Dataset = gdal.Warp(
+                "",
+                src_ds,
+                format="MEM",
+                dstSRS=f"EPSG:{self.epsg_code}",
+                xRes=out_pix[0],
+                yRes=out_pix[1],
+                resampleAlg=interpolation,
+            )
+
+        if resampled_ds is None:
+            raise RuntimeError("Failed to resample image!")
+
+        # Read reprojected data
+        resampled = self if inplace else self.copy()
+        resampled.array = resampled_ds.ReadAsArray()
+        if resampled.array.ndim == 3:
+            resampled.array = np.einsum("ijk->jki", resampled.array)
+        resampled.array = resampled.array.astype(utils.find_dtype(resampled.array)[1])
+
+        resampled.transformation = list(resampled_ds.GetGeoTransform())
+        resampled.projection = resampled_ds.GetProjection()
+        resampled.epsg_code = int(
+            osr.SpatialReference(wkt=resampled.projection).GetAttrValue("AUTHORITY", 1)
+        )
+        resampled.metadata = resampled_ds.GetMetadata()
+
+        # Clean up
+        src_ds = None
+        resampled_ds = None
 
         return resampled if inplace is False else None
 
@@ -273,17 +294,18 @@ class Image(_Image):
         :return: gdal.Dataset if ``path="MEM"``, otherwise ``None``.
         """
         if nodata is None:
-            nodata = self.metadata.get("nodata")
+            nodata = self.nodata
 
         # Check that the pixel sizes are of the correct sign
         if self.transformation[-1] > 0:
             self.transformation[-1] *= -1
 
         # Get array type
+        datatype = datatype or self.dtype
         if datatype is None:
             datatype, _ = utils.find_dtype(self.array)
+            self.array = self.array.astype(datatype)
 
-        self.array = self.array.astype(datatype)
         gdal_datatype = rasteroptions.GDAL_DTYPES[datatype]
 
         try:

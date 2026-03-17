@@ -7,7 +7,6 @@ from pathlib import Path
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
-    print(repo_root)
     docs_dir = repo_root
     source_dir = docs_dir / "source"
     build_dir = docs_dir / "build" / "html"
