@@ -30,6 +30,10 @@ def find_dtype(
         "float32": np.float32,
     }
 
+    # For masked arrays use only the valid (unmasked) values
+    if in_arr.size == 0:
+        return "float32", np.float32
+
     # Get minimum and maximum values in the array and the value of one random element
     min_val = np.min(in_arr)
     max_val = np.max(abs(in_arr))
@@ -59,8 +63,81 @@ def find_dtype(
     return arrtype, npdtype
 
 
+def _image_tiles(image: "Image", ksize, nblocks, pad) -> np.ndarray:  # noqa: F821
+    """Return a 2-D object array of georeferenced :class:`~resens.base.Image` tiles."""
+    from .base import Image
+
+    shape = image.array.shape
+    if ksize is not None:
+        if isinstance(ksize, (list, tuple)):
+            ksize_x, ksize_y = ksize[0], ksize[1]
+            step_x, step_y = ksize[0], ksize[1]
+        else:
+            ksize_x = ksize_y = step_x = step_y = ksize
+    elif nblocks is not None:
+        if isinstance(nblocks, (list, tuple)):
+            ksize_x = shape[1] // nblocks[0]
+            ksize_y = shape[0] // nblocks[1]
+        else:
+            ksize_x = shape[1] // nblocks
+            ksize_y = shape[0] // nblocks
+        step_x, step_y = ksize_x, ksize_y
+    else:
+        raise RuntimeError("One of `ksize`, `nblocks` needs to be passed!")
+
+    tiles = get_tiles(image.array, ksize=ksize, nblocks=nblocks, pad=pad)
+    ny, nx = tiles.shape[:2]
+
+    x0, psx, skx, y0, sky, psy = image.transformation
+    result = np.empty((ny, nx), dtype=object)
+    for i in range(ny):
+        for j in range(nx):
+            result[i, j] = Image(
+                array=tiles[i, j].copy(),
+                transformation=[
+                    x0 + j * step_x * psx,
+                    psx,
+                    skx,
+                    y0 + i * step_y * psy,
+                    sky,
+                    psy,
+                ],
+                projection=image.projection,
+                epsg_code=image.epsg_code,
+                nodata=image.nodata,
+            )
+
+    return result
+
+
+def _image_sliding_win(image, ksize, step_x, step_y, pad) -> np.ndarray:
+    """Return a 2-D object array of georeferenced :class:`~resens.base.Image` windows."""
+    from .base import Image
+
+    windows = get_sliding_win(
+        image.array, ksize=ksize, step_x=step_x, step_y=step_y, pad=pad
+    )
+    ny, nx = windows.shape[:2]
+    radius = ksize // 2 if pad else 0
+
+    x0, psx, skx, y0, sky, psy = image.transformation
+    result = np.empty((ny, nx), dtype=object)
+    for i in range(ny):
+        for j in range(nx):
+            win_x0 = x0 + (j * step_x - radius) * psx
+            win_y0 = y0 + (i * step_y - radius) * psy
+            result[i, j] = Image(
+                array=windows[i, j].copy(),
+                transformation=[win_x0, psx, skx, win_y0, sky, psy],
+                projection=image.projection,
+                epsg_code=image.epsg_code,
+                nodata=image.nodata,
+            )
+    return result
+
+
 def swf(
-    in_arr: np.ndarray, ksize: int = None, filter_op: Union[Callable, str] = "mean"
+    in_arr: np.ndarray, ksize: int, filter_op: Union[Callable, str] = "mean"
 ) -> np.ndarray:
     """Apply a side-window filter (mean or median) pixel-by-pixel.
 
@@ -179,22 +256,32 @@ def swf(
 
 
 def get_sliding_win(
-    array: np.ndarray,
+    image: Union["Image", np.ndarray],  # noqa: F821
     ksize: int,
     step_x: int = 1,
     step_y: int = 1,
     pad: bool = True,
 ) -> np.ndarray:
-    """Return a strided view of sliding windows over an array.
+    """Return a strided view of sliding windows over an array or Image.
 
-    :param array: Input array (2D or 3D).
+    :param image: Input array (2D or 3D) or :class:`~resens.base.Image`. When an
+        ``Image`` is passed, returns a 2-D object array of georeferenced ``Image``
+        windows instead of a strided ndarray view.
     :param ksize: Window size.
     :param step_x: Stride in x-direction.
     :param step_y: Stride in y-direction.
     :param pad: If ``True``, reflect-pad by ``ksize//2`` before extracting windows.
-    :return: A strided array view containing windows.
+    :return: A strided array view containing windows, or a 2-D object array of
+        :class:`~resens.base.Image` instances when an ``Image`` is passed.
     """
     from numpy.lib.stride_tricks import as_strided
+
+    from .base import Image as _Image
+
+    if isinstance(image, _Image):
+        return _image_sliding_win(
+            image, ksize=ksize, step_x=step_x, step_y=step_y, pad=pad
+        )
 
     # Get window radius, padded array and strides
     if pad:
@@ -203,43 +290,46 @@ def get_sliding_win(
             [radius, radius],
             [radius, radius],
         ]
-        if array.ndim == 3:
+        if image.ndim == 3:
             pad_widths += [[0, 0]]
-        array = np.pad(array, pad_widths, "reflect")
+        image = np.pad(image, pad_widths, "reflect")
     else:
         radius = 0
 
-    if array.ndim == 2:
-        sy, sx = array.shape
+    if image.ndim == 2:
+        sy, sx = image.shape
         nbands = False
-    elif array.ndim == 3:
-        sy, sx, nbands = array.shape
+    elif image.ndim == 3:
+        sy, sx, nbands = image.shape
     else:
-        raise ValueError(f"Incorrect array shape {array.shape}")
+        raise ValueError(f"Incorrect array shape {image.shape}")
 
     y_size = int(np.floor((sy + 2 * radius - ksize) / step_y) + 1)
     x_size = int(np.floor((sx + 2 * radius - ksize) / step_x) + 1)
 
+    def _make_stride_params(arr, step_y, step_x, nbands):
+        s = arr.strides
+        if not nbands:
+            return (s[0] * step_y, s[1] * step_x) + s
+        else:
+            return (s[0] * step_y, s[1] * step_x, s[2]) + s
+
     if not nbands:
-        strides = (
-            array.strides[0] * step_y,
-            array.strides[1] * step_x,
-        ) + array.strides
         out_shape = (y_size, x_size, ksize, ksize)
     else:
-        strides = (
-            array.strides[0] * step_y,
-            array.strides[1] * step_x,
-            array.strides[2],
-        ) + array.strides
         out_shape = (y_size, x_size, 1, ksize, ksize, nbands)
 
-    sliced_array = np.squeeze(as_strided(array, shape=out_shape, strides=strides))
-    return sliced_array
+    return np.squeeze(
+        as_strided(
+            image,
+            shape=out_shape,
+            strides=_make_stride_params(image, step_y, step_x, nbands),
+        )
+    )
 
 
 def get_tiles(
-    array: np.ndarray,
+    image: Union["Image", np.ndarray],  # noqa: F821
     ksize: Union[int, Sequence[int]] = None,
     nblocks: int = None,
     pad: bool = True,
@@ -248,13 +338,21 @@ def get_tiles(
 
     Provide either ``ksize`` (tile size) or ``nblocks`` (number of blocks).
 
-    :param array: Input array (2D or 3D).
+    :param image: Input array (2D or 3D) or :class:`~resens.base.Image`. When an
+        ``Image`` is passed, returns a 2-D object array of georeferenced ``Image``
+        tiles instead of a strided ndarray view.
     :param ksize: Tile size as an int or as ``(ksize_x, ksize_y)``.
     :param nblocks: Number of tiles as an int or as ``(nblocks_x, nblocks_y)``.
     :param pad: If ``True``, reflect-pad to make the array divisible by tile size.
-    :return: A strided array view containing tiles.
+    :return: A strided array view containing tiles, or a 2-D object array of
+        :class:`~resens.base.Image` instances when an ``Image`` is passed.
     """
     from numpy.lib.stride_tricks import as_strided
+
+    from .base import Image as _Image
+
+    if isinstance(image, _Image):
+        return _image_tiles(image, ksize=ksize, nblocks=nblocks, pad=pad)
 
     if ksize:
         if isinstance(ksize, (list, tuple)):
@@ -269,13 +367,13 @@ def get_tiles(
             step_y = ksize
     elif nblocks:
         if isinstance(nblocks, (list, tuple)):
-            ksize_x = array.shape[1] // nblocks[0]
-            ksize_y = array.shape[0] // nblocks[1]
+            ksize_x = image.shape[1] // nblocks[0]
+            ksize_y = image.shape[0] // nblocks[1]
             step_x = ksize_x
             step_y = ksize_y
         else:
-            ksize_x = array.shape[1] // nblocks
-            ksize_y = array.shape[0] // nblocks
+            ksize_x = image.shape[1] // nblocks
+            ksize_y = image.shape[0] // nblocks
             step_x = ksize_x
             step_y = ksize_y
     else:
@@ -284,37 +382,39 @@ def get_tiles(
     # Get window radius, padded array and strides
     if pad:
         pad_widths = [
-            [0, ksize - array.shape[0] % ksize],  # 0-axis padding
-            [0, ksize - array.shape[1] % ksize],  # 1-axis padding
+            [0, (-image.shape[0]) % ksize_y],  # 0-axis padding
+            [0, (-image.shape[1]) % ksize_x],  # 1-axis padding
         ]
-        if array.ndim == 3:
+        if image.ndim == 3:
             pad_widths += [[0, 0]]  # 2-axis padding (no padding)
-        array = np.pad(array, pad_widths, "reflect")
+        image = np.pad(image, pad_widths, "reflect")
 
-    if array.ndim == 2:
-        sy, sx = array.shape
+    if image.ndim == 2:
+        sy, sx = image.shape
         nbands = False
-    elif array.ndim == 3:
-        sy, sx, nbands = array.shape
+    elif image.ndim == 3:
+        sy, sx, nbands = image.shape
     else:
-        raise ValueError(f"Incorrect array shape {array.shape}")
+        raise ValueError(f"Incorrect array shape {image.shape}")
+
+    def _make_tile_strides(arr, step_y, step_x, nbands):
+        s = arr.strides
+        if not nbands:
+            return (s[0] * step_y, s[1] * step_x) + s
+        else:
+            return (s[0] * step_y, s[1] * step_x, s[2]) + s
 
     # Calculate output shape
     if not nbands:
-        strides = (
-            array.strides[0] * step_y,
-            array.strides[1] * step_x,
-        ) + array.strides
         out_shape = (sy // step_y, sx // step_x, ksize_y, ksize_x)
     else:
-        strides = (
-            array.strides[0] * step_y,
-            array.strides[1] * step_x,
-            array.strides[2],
-        ) + array.strides
         out_shape = (sy // step_y, sx // step_x, 1, ksize_y, ksize_x, nbands)
 
     # Slice the padded array using strides
-    sliced_array = np.squeeze(as_strided(array, shape=out_shape, strides=strides))
-
-    return sliced_array
+    return np.squeeze(
+        as_strided(
+            image,
+            shape=out_shape,
+            strides=_make_tile_strides(image, step_y, step_x, nbands),
+        )
+    )

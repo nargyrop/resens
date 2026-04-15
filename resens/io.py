@@ -1,4 +1,5 @@
 import logging
+import tarfile
 import zipfile
 from pathlib import Path
 from typing import Dict, Sequence, Tuple, Union
@@ -61,8 +62,10 @@ def load_image(
 
     # in case the raster is geoereferenced with GCPs, warp it to create a raster with
     # geotransformation
+    _vsimem_path = None
     if transf == [0, 1, 0, 0, 0, 1] and len(dataset.GetGCPs()):
-        dataset = gdal.Warp("/vsimem/warp.tif", dataset, dstSRS=f"EPSG:{epsg}")
+        _vsimem_path = "/vsimem/warp.tif"
+        dataset = gdal.Warp(_vsimem_path, dataset, dstSRS=f"EPSG:{epsg}")
         transf = list(dataset.GetGeoTransform())
 
     # Get metadata
@@ -144,8 +147,10 @@ def load_image(
     transf = [xo, psx, skx, yo, sky, psy]
 
     dataset = None
+    if _vsimem_path is not None:
+        gdal.Unlink(_vsimem_path)
 
-    return Image(array, transf, proj, epsg, metadata, nodata_val, dtype_s)
+    return Image(array, transf, proj, epsg, metadata, nodata_val)
 
 
 def load_from_zip(
@@ -157,14 +162,16 @@ def load_from_zip(
     fill_outside: bool = False,
     masked: bool = False,
 ) -> Union[Dict[str, Image], None]:
-    """Load rasters from within a ZIP archive.
+    """Load rasters from within a ZIP, TAR, or TAR.GZ archive.
 
     Files are selected by:
     - matching the provided file ``extension``,
     - containing any of the strings in ``patterns``,
     - and containing ``group`` (if provided).
 
-    :param zipf_path: Path to zip file
+    Supported archive formats: ``.zip``, ``.tar``, ``.tar.gz``, ``.tgz``.
+
+    :param zipf_path: Path to the archive file.
     :param patterns: List of strings included in the file names (e.g. band numbers)
     :param extension: Extension of the target image
     :param group: Extra string to search for.
@@ -175,56 +182,62 @@ def load_from_zip(
         this value will be converted to `nan`. Masking the array will convert it to
         float32, increasing the memory consumption.
     :return: A dictionary mapping each matched key from ``patterns`` to an
-        :class:`~resens.base.Image`. Returns ``None`` if the ZIP cannot be read.
+        :class:`~resens.base.Image`. Returns ``None`` if the archive cannot be read.
     """
 
     # ensure ``patterns`` is a list
     if not isinstance(patterns, (list, tuple)):
         patterns = [patterns]
 
-    # Check if the zip file path is correct
+    # Normalise path
     if isinstance(zipf_path, str):
         zipf_path = Path(zipf_path)
     if not zipf_path.exists():
-        raise FileNotFoundError(f"Zip file {zipf_path} does not exist!")
+        raise FileNotFoundError(f"Archive {zipf_path} does not exist!")
 
-    # Initialize gdal zip file handler
-    ziphandler = "/vsizip/"
-
-    # Read zip file
-    try:
-        archive = zipfile.ZipFile(zipf_path, "r")
-    except zipfile.BadZipfile:
-        return None
+    # Choose GDAL virtual-FS handler and Python reader based on file extension
+    name_lower = zipf_path.name.lower()
+    if name_lower.endswith((".tar.gz", ".tgz", ".tar")):
+        vsihandler = "/vsitar/"
+        is_tar = True
     else:
-        # Get the zip structure for the required bands
-        img_ls = [
-            f
-            for f in archive.namelist()
-            if f.endswith(extension) and any(x in f for x in patterns) and group in f
-        ]
+        vsihandler = "/vsizip/"
+        is_tar = False
 
-        # Create dictionaries to store the data
-        band_dict = {}
+    # Open archive and collect matching file names
+    try:
+        if is_tar:
+            archive = tarfile.open(zipf_path, "r:*")
+            file_list = archive.getnames()
+        else:
+            archive = zipfile.ZipFile(zipf_path, "r")
+            file_list = archive.namelist()
+    except (zipfile.BadZipFile, tarfile.TarError):
+        return None
 
-        for img in img_ls:
-            try:
-                # Find which of the req files fits the current, create the dict key
-                # and store it in the keys' list
-                (key_in,) = [key for key in patterns if key in img]
+    img_ls = [
+        f
+        for f in file_list
+        if f.endswith(extension) and any(x in f for x in patterns) and group in f
+    ]
 
-                if key_in in band_dict:
-                    logger.warning(f"Multiple files were found for key: {key_in}!")
-                    continue
+    band_dict = {}
+    for img in img_ls:
+        try:
+            # Identify which pattern key this file belongs to
+            (key_in,) = [key for key in patterns if key in img]
 
-                # Load image, get metadata and store to dictionary
-                band_dict[key_in] = load_image(
-                    img_path=ziphandler + zipf_path.joinpath(img).as_posix(),
-                    bbox=bounds,
-                    fill_outside=fill_outside,
-                    masked=masked,
-                )
-            except AttributeError:
-                raise AttributeError(f"Error loading {img}")
+            if key_in in band_dict:
+                logger.warning(f"Multiple files were found for key: {key_in}!")
+                continue
 
-        return band_dict
+            band_dict[key_in] = load_image(
+                img_path=vsihandler + zipf_path.joinpath(img).as_posix(),
+                bbox=bounds,
+                fill_outside=fill_outside,
+                masked=masked,
+            )
+        except AttributeError:
+            raise AttributeError(f"Error loading {img}")
+
+    return band_dict

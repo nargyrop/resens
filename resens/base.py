@@ -25,7 +25,6 @@ class _Image:
     epsg_code: int = 1
     metadata: Dict = field(default_factory=dict)
     nodata: Number = None
-    dtype: str = None
 
 
 class Image(_Image):
@@ -40,6 +39,7 @@ class Image(_Image):
             projection=self.projection,
             epsg_code=self.epsg_code,
             metadata=self.metadata.copy(),
+            nodata=self.nodata,
         )
 
     def extents(
@@ -147,12 +147,13 @@ class Image(_Image):
         if resampled_ds is None:
             raise RuntimeError("Failed to resample image!")
 
-        # Read reprojected data
+        # Read resampled data
         resampled = self if inplace else self.copy()
-        resampled.array = resampled_ds.ReadAsArray()
-        if resampled.array.ndim == 3:
-            resampled.array = np.einsum("ijk->jki", resampled.array)
-        resampled.array = resampled.array.astype(utils.find_dtype(resampled.array)[1])
+        _arr = resampled_ds.ReadAsArray()
+        if _arr.ndim == 3:
+            _arr = np.einsum("ijk->jki", _arr)
+        _arr = _arr.astype(utils.find_dtype(_arr)[1])
+        resampled.array = _arr
 
         resampled.transformation = list(resampled_ds.GetGeoTransform())
         resampled.projection = resampled_ds.GetProjection()
@@ -188,10 +189,11 @@ class Image(_Image):
 
         # Read reprojected data
         reproj = self if inplace else self.copy()
-        reproj.array = reproj_ds.ReadAsArray()
-        if reproj.array.ndim == 3:
-            reproj.array = np.einsum("ijk->jki", reproj.array)
-        reproj.array = reproj.array.astype(utils.find_dtype(reproj.array)[1])
+        _arr = reproj_ds.ReadAsArray()
+        if _arr.ndim == 3:
+            _arr = np.einsum("ijk->jki", _arr)
+        _arr = _arr.astype(utils.find_dtype(_arr)[1])
+        reproj.array = _arr
 
         reproj.transformation = list(reproj_ds.GetGeoTransform())
         reproj.projection = reproj_ds.GetProjection()
@@ -231,15 +233,16 @@ class Image(_Image):
             return arr.astype(np.uint8)
 
         conv_8bit = self if inplace else self.copy()
-        bit8_img = conv_8bit.array.astype(np.float32)
+        conv_8bit.array = conv_8bit.array.astype(np.float32)
 
-        if bit8_img.ndim == 3:
-            for i in range(bit8_img.shape[2]):
-                bit8_img[:, :, i] = _make_8bit(bit8_img[:, :, i])
+        if conv_8bit.array.ndim == 3:
+            out = np.empty(conv_8bit.array.shape, dtype=np.uint8)
+            for i in range(conv_8bit.array.shape[2]):
+                out[..., i] = _make_8bit(conv_8bit.array[..., i])
         else:
-            bit8_img = _make_8bit(bit8_img)
+            out = _make_8bit(conv_8bit.array)
 
-        conv_8bit.array = bit8_img
+        conv_8bit.array = out
         return conv_8bit if not inplace else None
 
     def to_grayscale(self, inplace: bool = False) -> Optional["Image"]:
@@ -251,24 +254,32 @@ class Image(_Image):
         :return: A new :class:`~resens.base.Image` or ``None`` if ``inplace=True``.
         """
         # If the image is not composed of multiple channels, it is already grayscale
-        try:
-            assert self.array.ndim == 3
-        except AssertionError:
+        if self.array.ndim != 3:
             return self.array
 
+        src = self.array  # capture before potential inplace overwrite
         grayscale = self if inplace else self.copy()
-        img_sum = np.sum(self.array, axis=2)  # Sum of all channel pixels
 
-        # Compute weight for each channel
-        img_weights_arr = np.dstack(
-            [np.divide(self.array[..., i], img_sum) for i in range(self.array.shape[2])]
+        # Use underlying data for weight computation to avoid masked-array division issues
+        src_data = src.data if isinstance(src, np.ma.MaskedArray) else src
+        img_sum = np.sum(src_data, axis=2)  # H×W sum across bands
+
+        # Compute each channel's mean fractional contribution without a full H×W×C copy
+        channel_weights = np.array(
+            [
+                np.nanmean(np.divide(src_data[..., i], img_sum))
+                for i in range(src_data.shape[2])
+            ]
         )
-        channel_weights = np.nanmean(img_weights_arr, axis=(0, 1))
-        while channel_weights.sum() > 1.0:
-            channel_weights -= channel_weights * 0.01  # Make sure the weights sum to 1.0
+        del img_sum
+        channel_weights = channel_weights / channel_weights.sum()  # Normalize to sum to 1
 
-        # Get grayscale image
-        grayscale.array = np.nansum(self.array * channel_weights, axis=2)
+        # Accumulate weighted bands one at a time to limit peak memory usage
+        result = np.zeros(src_data.shape[:2], dtype=np.float64)
+        for i, w in enumerate(channel_weights):
+            result += src_data[..., i] * w
+
+        grayscale.array = result
 
         return grayscale if not inplace else None
 
@@ -301,27 +312,17 @@ class Image(_Image):
             self.transformation[-1] *= -1
 
         # Get array type
-        datatype = datatype or self.dtype
         if datatype is None:
             datatype, _ = utils.find_dtype(self.array)
             self.array = self.array.astype(datatype)
 
         gdal_datatype = rasteroptions.GDAL_DTYPES[datatype]
 
-        try:
-            # Determine the shape of the array and the number of bands
-            if self.array.shape[0] > self.array.shape[2]:
-                row_ind = 0
-                col_ind = 1
-                nband = self.array.shape[2]
-            else:
-                row_ind = 1
-                col_ind = 2
-                nband = self.array.shape[0]
-
-        except IndexError:
-            row_ind = 0
-            col_ind = 1
+        # Determine the shape of the array and the number of bands
+        if self.array.ndim == 3:
+            nrows, ncols, nband = self.array.shape
+        else:
+            nrows, ncols = self.array.shape
             nband = 1
 
         # Construct output image path
@@ -336,8 +337,8 @@ class Image(_Image):
             driver: gdal.Driver = gdal.GetDriverByName("MEM")
         dataset: gdal.Dataset = driver.Create(
             path.as_posix() if not path == "MEM" else "",
-            self.array.shape[col_ind],
-            self.array.shape[row_ind],
+            ncols,
+            nrows,
             nband,
             gdal_datatype,
             options=[]
@@ -352,16 +353,11 @@ class Image(_Image):
             dataset.SetMetadata({**self.metadata, **metadata})
 
         for i in range(nband):
-            if not nband == 1:
-                out_band: gdal.Band = dataset.GetRasterBand(i + 1)
-                if nodata:
-                    out_band.SetNoDataValue(nodata)
-                out_band.WriteArray(self.array[..., i])
-            else:
-                out_band: gdal.Band = dataset.GetRasterBand(i + 1)
-                if nodata:
-                    out_band.SetNoDataValue(nodata)
-                out_band.WriteArray(self.array)
+            out_band: gdal.Band = dataset.GetRasterBand(i + 1)
+            if nodata is not None:
+                out_band.SetNoDataValue(nodata)
+            band_data = self.array[..., i] if nband > 1 else self.array
+            out_band.WriteArray(band_data)
             out_band = None
 
         dataset.FlushCache()
@@ -455,4 +451,4 @@ class Image(_Image):
         clipped.transformation[0] -= minx * clipped.transformation[1]
         clipped.transformation[3] -= maxy * clipped.transformation[-1]
 
-        return clipped
+        return clipped if not inplace else None
