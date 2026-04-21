@@ -85,7 +85,7 @@ def load_image(
             if xoff < 0:
                 padx[0] = abs(xoff)
             if yoff < 0:
-                pady[0] = abs(xoff)
+                pady[0] = abs(yoff)
         xoff = 0 if xoff < 0 else xoff
         yoff = 0 if yoff < 0 else yoff
 
