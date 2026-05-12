@@ -1,5 +1,5 @@
 fsspec
-gdal==3.4.1
+gdal==3.13.0
 matplotlib
 numpy<2
 setuptools
