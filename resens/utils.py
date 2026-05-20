@@ -319,12 +319,10 @@ def get_sliding_win(
     else:
         out_shape = (y_size, x_size, 1, ksize, ksize, nbands)
 
-    return np.squeeze(
-        as_strided(
-            image,
-            shape=out_shape,
-            strides=_make_stride_params(image, step_y, step_x, nbands),
-        )
+    return as_strided(
+        image,
+        shape=out_shape,
+        strides=_make_stride_params(image, step_y, step_x, nbands),
     )
 
 
@@ -411,10 +409,8 @@ def get_tiles(
         out_shape = (sy // step_y, sx // step_x, 1, ksize_y, ksize_x, nbands)
 
     # Slice the padded array using strides
-    return np.squeeze(
-        as_strided(
-            image,
-            shape=out_shape,
-            strides=_make_tile_strides(image, step_y, step_x, nbands),
-        )
+    return as_strided(
+        image,
+        shape=out_shape,
+        strides=_make_tile_strides(image, step_y, step_x, nbands),
     )
